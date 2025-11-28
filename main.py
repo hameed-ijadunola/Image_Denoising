@@ -157,35 +157,56 @@ def train_model(args):
         "channels": dataset_config.get("channels", 3),
     }
 
-    # Create trainer
-    wandb_config = {
-        "log_interval": args.wandb_log_interval,
-        "log_images": args.wandb_log_images,
-        "log_model": args.wandb_log_model,
-    }
+    # Check if model requires training
+    requires_training = model_config.get("requires_training", True)
 
-    trainer = Trainer(
-        model=model,
-        device=device,
-        train_loader=train_loader,
-        test_loader=test_loader,
-        optimizer_name=args.optimizer,
-        lr=args.lr,
-        save_dir=save_dir,
-        use_wandb=use_wandb,
-        wandb_config=wandb_config,
-        model_metadata=model_metadata,
-        dataset_metadata=dataset_metadata,
-    )
+    if requires_training:
+        # Deep learning model - needs training
+        # Create trainer
+        wandb_config = {
+            "log_interval": args.wandb_log_interval,
+            "log_images": args.wandb_log_images,
+            "log_model": args.wandb_log_model,
+        }
 
-    # Train
-    train_losses, test_losses = trainer.train(num_epochs=args.epochs)
+        trainer = Trainer(
+            model=model,
+            device=device,
+            train_loader=train_loader,
+            test_loader=test_loader,
+            optimizer_name=args.optimizer,
+            lr=args.lr,
+            save_dir=save_dir,
+            use_wandb=use_wandb,
+            wandb_config=wandb_config,
+            model_metadata=model_metadata,
+            dataset_metadata=dataset_metadata,
+        )
 
-    # Plot training history
-    plot_path = os.path.join(
-        args.results_dir, f"{args.noise_type}_{args.optimizer}_loss.png"
-    )
-    plot_training_history(train_losses, test_losses, save_path=plot_path)
+        # Train
+        train_losses, test_losses = trainer.train(num_epochs=args.epochs)
+    else:
+        # Traditional method - no training needed
+        print("\n" + "-" * 70)
+        print("TRADITIONAL METHOD - NO TRAINING REQUIRED")
+        print("-" * 70)
+        print(f"\n{model_config['name']} is a traditional denoising method.")
+        print("Skipping training phase and proceeding directly to evaluation.")
+        print("\nNote: Traditional methods have fixed parameters and do not")
+        print("require gradient-based optimization.\n")
+
+        # No training losses for traditional methods
+        train_losses = []
+        test_losses = []
+
+    # Plot training history (only for models that were trained)
+    if requires_training and train_losses:
+        plot_path = os.path.join(
+            args.results_dir, f"{args.noise_type}_{args.optimizer}_loss.png"
+        )
+        plot_training_history(train_losses, test_losses, save_path=plot_path)
+    else:
+        plot_path = None
 
     # Evaluate
     print("\nEvaluating model on test set...")
@@ -234,8 +255,8 @@ def train_model(args):
 
     # Log images to wandb
     if use_wandb and args.wandb_log_images:
-        # Log training history plot
-        if os.path.exists(plot_path):
+        # Log training history plot (only if trained)
+        if plot_path and os.path.exists(plot_path):
             wandb.log({"training_loss_curve": wandb.Image(plot_path)})
 
         # Log PSNR comparison
@@ -286,9 +307,9 @@ def train_model(args):
         "results": {
             "metrics_noisy": {k: float(v) for k, v in metrics_noisy.items()},
             "metrics_denoised": {k: float(v) for k, v in metrics_denoised.items()},
-            "final_train_loss": float(train_losses[-1]),
-            "final_test_loss": float(test_losses[-1]),
-            "best_test_loss": float(trainer.best_loss),
+            "final_train_loss": float(train_losses[-1]) if train_losses else None,
+            "final_test_loss": float(test_losses[-1]) if test_losses else None,
+            "best_test_loss": float(trainer.best_loss) if requires_training else None,
         },
     }
 

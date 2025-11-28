@@ -36,49 +36,49 @@ MODEL_REGISTRY = {
     #     "requires_training": True,
     #     "default_params": {...},
     # },
-    # Example: Traditional methods (no training needed)
-    # "nlm": {
-    #     "name": "Non-Local Means",
-    #     "type": "traditional",
-    #     "class": "NonLocalMeans",
-    #     "module": "src.traditional.nlm",
-    #     "description": "Non-Local Means denoising filter",
-    #     "paper": "Buades et al., 2005",
-    #     "requires_training": False,
-    #     "default_params": {
-    #         "h": 10,
-    #         "template_window_size": 7,
-    #         "search_window_size": 21,
-    #     },
-    # },
-    # "bilateral": {
-    #     "name": "Bilateral Filter",
-    #     "type": "traditional",
-    #     "class": "BilateralFilter",
-    #     "module": "src.traditional.bilateral",
-    #     "description": "Bilateral filtering for edge-preserving denoising",
-    #     "paper": "Tomasi and Manduchi, 1998",
-    #     "requires_training": False,
-    #     "default_params": {
-    #         "d": 9,
-    #         "sigma_color": 75,
-    #         "sigma_space": 75,
-    #     },
-    # },
-    # "wavelet": {
-    #     "name": "Wavelet Denoising",
-    #     "type": "traditional",
-    #     "class": "WaveletDenoising",
-    #     "module": "src.traditional.wavelet",
-    #     "description": "Wavelet-based denoising using soft thresholding",
-    #     "paper": "Donoho, 1995",
-    #     "requires_training": False,
-    #     "default_params": {
-    #         "wavelet": "db1",
-    #         "mode": "soft",
-    #         "level": None,
-    #     },
-    # },
+    # Traditional methods (no training needed)
+    "nlm": {
+        "name": "Non-Local Means",
+        "type": "traditional",
+        "class": "NonLocalMeans",
+        "module": "src.traditional.nlm",
+        "description": "Non-Local Means denoising filter",
+        "paper": "Buades et al., 2005",
+        "requires_training": False,
+        "default_params": {
+            "h": 10,
+            "template_window_size": 7,
+            "search_window_size": 21,
+        },
+    },
+    "bilateral": {
+        "name": "Bilateral Filter",
+        "type": "traditional",
+        "class": "BilateralFilter",
+        "module": "src.traditional.bilateral",
+        "description": "Bilateral filtering for edge-preserving denoising",
+        "paper": "Tomasi and Manduchi, 1998",
+        "requires_training": False,
+        "default_params": {
+            "d": 9,
+            "sigma_color": 75,
+            "sigma_space": 75,
+        },
+    },
+    "wavelet": {
+        "name": "Wavelet Denoising",
+        "type": "traditional",
+        "class": "WaveletDenoising",
+        "module": "src.traditional.wavelet",
+        "description": "Wavelet-based denoising using soft thresholding",
+        "paper": "Donoho, 1995",
+        "requires_training": False,
+        "default_params": {
+            "wavelet": "db1",
+            "mode": "soft",
+            "level": None,
+        },
+    },
 }
 
 # ============================================================================

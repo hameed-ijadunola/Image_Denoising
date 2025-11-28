@@ -9,3 +9,5 @@ wandb>=0.16.0
 lpips>=0.1.4
 pytz>=2024.0
 pandas>=2.0.0
+PyWavelets>=1.4.0  # For wavelet-based denoising
+opencv-python>=4.8.0  # For NLM and bilateral filtering
