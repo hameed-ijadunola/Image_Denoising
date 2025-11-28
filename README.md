@@ -1,23 +1,42 @@
-# Image Denoising Using U-Net
+# Image Denoising - Multiple Approaches
 
-A PyTorch implementation of image denoising using U-Net architecture, trained on the CIFAR-10 dataset. This project replicates the work described in "Image Denoising Using a U-net" by Paavani Dua.
+A comprehensive PyTorch implementation of image denoising using both deep learning and traditional methods, trained on the CIFAR-10 dataset.
 
 ## Overview
 
-This project demonstrates the effectiveness of deep convolutional neural networks (CNNs) for image denoising tasks. Unlike traditional denoising techniques such as spatial filtering, wavelet thresholding, and transform domain filtering, the U-Net architecture provides:
+This project demonstrates various approaches to image denoising tasks, from traditional techniques to state-of-the-art deep learning and reinforcement learning methods.
 
-- Better denoising results with preserved edge information
-- More computational efficiency
-- Automatic feature learning without manual parameter tuning
+## Implemented Models
+
+### Deep Learning Models
+
+1. **U-Net** - Classic encoder-decoder architecture with skip connections
+   - Paper: Ronneberger et al., 2015
+   - Better denoising with preserved edge information
+   - Efficient with automatic feature learning
+
+2. **R3L** - Residual Recovery using Reinforcement Learning ⭐ NEW
+   - Paper: Zhang et al., 2021
+   - Uses A3C (Actor-Critic) framework
+   - Learns pixel-wise denoising through reinforcement learning
+   - Better generalization to noise level variations
+   - See [docs/R3L_implementation.md](docs/R3L_implementation.md) for details
+
+### Traditional Methods
+
+3. **Non-Local Means (NLM)** - Non-local averaging denoising
+4. **Bilateral Filter** - Edge-preserving spatial filtering
+5. **Wavelet Denoising** - Transform domain denoising with soft thresholding
 
 ## Features
 
-- **U-Net Architecture**: Implementation of the classic U-Net with encoder-decoder structure and skip connections
+- **Multiple Models**: U-Net, R3L, NLM, Bilateral, Wavelet denoising
 - **Multiple Noise Types**: Support for Gaussian, Poisson, and Salt & Pepper noise
 - **Multiple Optimizers**: Comparison of Adam, RMSprop, and SGD optimizers
 - **Comprehensive Metrics**: PSNR, SSIM, MSE, MAE, and LPIPS for thorough quality evaluation
 - **Flexible Training**: Configurable hyperparameters including learning rate, batch size, epochs, and dropout
 - **Weights & Biases Integration**: Experiment tracking, visualization, and model versioning with wandb
+- **Extensible Registry**: Easy addition of new models through MODEL_REGISTRY
 
 ## Image Quality Metrics
 
@@ -114,28 +133,67 @@ python run_experiment.py optimizer_comparison --use-wandb
 
 📊 **See [WANDB_GUIDE.md](WANDB_GUIDE.md) for complete wandb integration documentation.**
 
-### Training
+### Training Different Models
 
-Train a model with default settings (Gaussian noise, Adam optimizer):
-```bash
-python main.py --mode train
-```
-
-Train with custom parameters:
+**Train U-Net (default):**
 ```bash
 python main.py --mode train \
+    --model unet \
+    --dataset cifar10 \
     --epochs 10 \
     --batch-size 16 \
-    --lr 0.001 \
-    --optimizer adam \
-    --noise-type gaussian \
-    --noise-param 0.05 \
-    --dropout 0.2
+    --lr 0.001
 ```
 
-### Available Options
+**Train R3L (Reinforcement Learning):**
+```bash
+python main.py --mode train \
+    --model r3l \
+    --dataset cifar10 \
+    --epochs 50 \
+    --batch-size 32 \
+    --lr 0.0001 \
+    --noise-type gaussian \
+    --noise-param 25
+```
 
-**Training Parameters:**
+**Use Traditional Methods (No Training):**
+```bash
+# Non-Local Means
+python main.py --mode eval \
+    --model nlm \
+    --dataset cifar10
+
+# Bilateral Filter
+python main.py --mode eval \
+    --model bilateral \
+    --dataset cifar10
+
+# Wavelet Denoising
+python main.py --mode eval \
+    --model wavelet \
+    --dataset cifar10
+```
+
+### Available Models
+
+Use the `--model` flag to select a denoising model:
+
+| Model | Key | Type | Training Required | Description |
+|-------|-----|------|-------------------|-------------|
+| U-Net | `unet` | Deep Learning | Yes | Encoder-decoder with skip connections |
+| R3L | `r3l` | Deep Learning (RL) | Yes | Reinforcement learning with A3C |
+| Non-Local Means | `nlm` | Traditional | No | Non-local averaging filter |
+| Bilateral Filter | `bilateral` | Traditional | No | Edge-preserving spatial filter |
+| Wavelet | `wavelet` | Traditional | No | Transform domain denoising |
+
+**R3L Specific Notes:**
+- Uses custom trainer with separate policy and value optimizers
+- Recommended learning rate: 1e-4 for policy, 1e-3 for value (automatic)
+- Requires more epochs (50+) than supervised models
+- See [docs/R3L_implementation.md](docs/R3L_implementation.md) for details
+
+### Training Parameters
 - `--epochs`: Number of training epochs (default: 5)
 - `--batch-size`: Batch size for training (default: 16)
 - `--lr`: Learning rate (default: 0.001)

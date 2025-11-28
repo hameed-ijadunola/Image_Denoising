@@ -25,6 +25,22 @@ MODEL_REGISTRY = {
             "dropout_rate": 0.2,
         },
     },
+    "r3l": {
+        "name": "R3L",
+        "type": "deep_learning",
+        "class": "R3L",
+        "module": "src.r3l",
+        "description": "Residual Recovery using Reinforcement Learning for Image Denoising",
+        "paper": "Zhang et al., 2021 - Connecting Deep Reinforcement Learning to Recurrent Neural Networks",
+        "requires_training": True,
+        "custom_trainer": True,  # Uses R3LTrainer instead of standard Trainer
+        "default_params": {
+            "in_channels": 3,
+            "num_stages": 5,
+            "action_range": (-13, 13),
+            "gamma": 0.95,
+        },
+    },
     # Example: Add more deep learning models
     # "dncnn": {
     #     "name": "DnCNN",

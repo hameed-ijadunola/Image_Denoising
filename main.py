@@ -171,22 +171,49 @@ def train_model(args):
             "log_model": args.wandb_log_model,
         }
 
-        trainer = Trainer(
-            model=model,
-            device=device,
-            train_loader=train_loader,
-            test_loader=test_loader,
-            optimizer_name=args.optimizer,
-            lr=args.lr,
-            save_dir=save_dir,
-            use_wandb=use_wandb,
-            wandb_config=wandb_config,
-            model_metadata=model_metadata,
-            dataset_metadata=dataset_metadata,
-        )
+        # Check if model requires custom trainer (e.g., R3L)
+        uses_custom_trainer = model_config.get("custom_trainer", False)
 
-        # Train
-        train_losses, test_losses = trainer.train(num_epochs=args.epochs)
+        if uses_custom_trainer and args.model == "r3l":
+            # Use R3L-specific trainer
+            from src.r3l_trainer import R3LTrainer
+
+            trainer = R3LTrainer(
+                model=model,
+                train_loader=train_loader,
+                val_loader=test_loader,
+                device=device,
+                learning_rate_policy=args.lr,
+                learning_rate_value=args.lr * 10,  # Value network learns faster
+                num_epochs=args.epochs,
+                save_dir=save_dir,
+                use_wandb=use_wandb,
+            )
+
+            # Train with R3L trainer
+            history = trainer.train()
+
+            # Extract losses for compatibility with existing plotting
+            train_losses = history.get("train_policy_loss", [])
+            test_losses = history.get("val_psnr", [])
+        else:
+            # Use standard trainer
+            trainer = Trainer(
+                model=model,
+                device=device,
+                train_loader=train_loader,
+                test_loader=test_loader,
+                optimizer_name=args.optimizer,
+                lr=args.lr,
+                save_dir=save_dir,
+                use_wandb=use_wandb,
+                wandb_config=wandb_config,
+                model_metadata=model_metadata,
+                dataset_metadata=dataset_metadata,
+            )
+
+            # Train
+            train_losses, test_losses = trainer.train(num_epochs=args.epochs)
     else:
         # Traditional method - no training needed
         print("\n" + "-" * 70)
@@ -303,7 +330,11 @@ def train_model(args):
             "metrics_denoised": {k: float(v) for k, v in metrics_denoised.items()},
             "final_train_loss": float(train_losses[-1]) if train_losses else None,
             "final_test_loss": float(test_losses[-1]) if test_losses else None,
-            "best_test_loss": float(trainer.best_loss) if requires_training else None,
+            "best_test_loss": float(
+                getattr(trainer, "best_loss", getattr(trainer, "best_val_psnr", None))
+            )
+            if requires_training
+            else None,
         },
     }
 
