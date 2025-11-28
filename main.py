@@ -14,6 +14,7 @@ from src.utils import (
     visualize_denoising,
     plot_training_history,
     plot_psnr_comparison,
+    plot_metrics_comparison,
 )
 from config import WANDB_CONFIG
 
@@ -123,28 +124,42 @@ def train_model(args):
 
     # Evaluate
     print("\nEvaluating model on test set...")
-    avg_psnr_noisy, avg_psnr_denoised = evaluate_model(model, test_loader, device)
+    metrics_noisy, metrics_denoised = evaluate_model(model, test_loader, device)
 
     print("\nResults:")
-    print(f"  Average Noisy PSNR: {avg_psnr_noisy:.2f} dB")
-    print(f"  Average Denoised PSNR: {avg_psnr_denoised:.2f} dB")
-    print(f"  Improvement: +{avg_psnr_denoised - avg_psnr_noisy:.2f} dB")
+    print("Noisy Images:")
+    for key, value in metrics_noisy.items():
+        print(f"  {key.upper()}: {value:.4f}")
+
+    print("\nDenoised Images:")
+    for key, value in metrics_denoised.items():
+        print(f"  {key.upper()}: {value:.4f}")
 
     # Log to wandb
     if use_wandb:
-        wandb.log(
-            {
-                "final_psnr_noisy": avg_psnr_noisy,
-                "final_psnr_denoised": avg_psnr_denoised,
-                "psnr_improvement": avg_psnr_denoised - avg_psnr_noisy,
-            }
-        )
+        log_dict = {}
+        for key, value in metrics_noisy.items():
+            log_dict[f"final_{key}_noisy"] = value
+        for key, value in metrics_denoised.items():
+            log_dict[f"final_{key}_denoised"] = value
+        wandb.log(log_dict)
 
-    # Plot PSNR comparison
+    # Plot PSNR comparison (legacy)
     psnr_plot_path = os.path.join(
         args.results_dir, f"{args.noise_type}_{args.optimizer}_psnr.png"
     )
-    plot_psnr_comparison(avg_psnr_noisy, avg_psnr_denoised, save_path=psnr_plot_path)
+    if "psnr" in metrics_noisy and "psnr" in metrics_denoised:
+        plot_psnr_comparison(
+            metrics_noisy["psnr"], metrics_denoised["psnr"], save_path=psnr_plot_path
+        )
+
+    # Plot all metrics comparison
+    metrics_plot_path = os.path.join(
+        args.results_dir, f"{args.noise_type}_{args.optimizer}_metrics.png"
+    )
+    plot_metrics_comparison(
+        metrics_noisy, metrics_denoised, save_path=metrics_plot_path
+    )
 
     # Visualize denoising
     vis_path = os.path.join(
@@ -162,6 +177,10 @@ def train_model(args):
         if os.path.exists(psnr_plot_path):
             wandb.log({"psnr_comparison": wandb.Image(psnr_plot_path)})
 
+        # Log metrics comparison
+        if os.path.exists(metrics_plot_path):
+            wandb.log({"metrics_comparison": wandb.Image(metrics_plot_path)})
+
         # Log denoising samples
         if os.path.exists(vis_path):
             wandb.log({"denoising_samples": wandb.Image(vis_path)})
@@ -175,9 +194,8 @@ def train_model(args):
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "dropout": args.dropout,
-        "avg_psnr_noisy": float(avg_psnr_noisy),
-        "avg_psnr_denoised": float(avg_psnr_denoised),
-        "psnr_improvement": float(avg_psnr_denoised - avg_psnr_noisy),
+        "metrics_noisy": {k: float(v) for k, v in metrics_noisy.items()},
+        "metrics_denoised": {k: float(v) for k, v in metrics_denoised.items()},
         "final_train_loss": float(train_losses[-1]),
         "final_test_loss": float(test_losses[-1]),
         "best_test_loss": float(trainer.best_loss),

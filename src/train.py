@@ -9,6 +9,7 @@ from tqdm import tqdm
 import os
 import json
 from datetime import datetime
+from .utils import calculate_all_metrics
 
 try:
     import wandb
@@ -17,6 +18,13 @@ try:
 except ImportError:
     WANDB_AVAILABLE = False
     print("Warning: wandb not installed. Install with: pip install wandb")
+
+try:
+    import lpips
+
+    LPIPS_AVAILABLE = True
+except ImportError:
+    LPIPS_AVAILABLE = False
 
 
 class Trainer:
@@ -78,7 +86,13 @@ class Trainer:
         # Training history
         self.train_losses = []
         self.test_losses = []
+        self.test_metrics = []  # Store metrics for each epoch
         self.best_loss = float("inf")
+
+        # Initialize LPIPS model if available
+        self.lpips_model = None
+        if LPIPS_AVAILABLE:
+            self.lpips_model = lpips.LPIPS(net="alex").to(device)
 
         # Create save directory
         os.makedirs(save_dir, exist_ok=True)
@@ -136,6 +150,60 @@ class Trainer:
         avg_loss = epoch_loss / len(self.test_loader)
         return avg_loss
 
+    def calculate_validation_metrics(self, num_batches=5):
+        """
+        Calculate comprehensive metrics on validation set
+
+        Args:
+            num_batches: Number of batches to evaluate (to save time)
+
+        Returns:
+            Dictionary with average metrics
+        """
+        self.model.eval()
+
+        # Initialize metric lists
+        metrics_lists = {
+            "psnr": [],
+            "ssim": [],
+            "mse": [],
+            "mae": [],
+        }
+
+        if LPIPS_AVAILABLE:
+            metrics_lists["lpips"] = []
+
+        with torch.no_grad():
+            for batch_idx, (noisy_images, clean_images) in enumerate(self.test_loader):
+                if batch_idx >= num_batches:
+                    break
+
+                noisy_images = noisy_images.to(self.device)
+                clean_images = clean_images.to(self.device)
+
+                # Denoise images
+                denoised_images = self.model(noisy_images)
+
+                # Calculate metrics for each image in batch
+                for i in range(noisy_images.size(0)):
+                    metrics = calculate_all_metrics(
+                        denoised_images[i], clean_images[i], self.lpips_model
+                    )
+
+                    # Append to lists
+                    for key in metrics:
+                        if metrics[key] is not None:
+                            metrics_lists[key].append(metrics[key])
+
+        # Calculate averages
+        avg_metrics = {
+            key: sum(values) / len(values)
+            for key, values in metrics_lists.items()
+            if values
+        }
+
+        return avg_metrics
+
     def save_checkpoint(self, epoch, is_best=False):
         """Save model checkpoint"""
         checkpoint = {
@@ -158,12 +226,13 @@ class Trainer:
             torch.save(checkpoint, best_path)
             print(f"✓ Saved best model (loss: {self.test_losses[-1]:.5f})")
 
-    def train(self, num_epochs):
+    def train(self, num_epochs, log_metrics_every=5):
         """
         Train the model for specified number of epochs
 
         Args:
             num_epochs: Number of epochs to train
+            log_metrics_every: Calculate and log comprehensive metrics every N epochs
         """
         print(f"\n{'=' * 60}")
         print("Training Configuration:")
@@ -172,6 +241,7 @@ class Trainer:
         print(f"  Epochs: {num_epochs}")
         print(f"  Device: {self.device}")
         print(f"  Wandb Logging: {'Enabled' if self.use_wandb else 'Disabled'}")
+        print(f"  Metrics Logging: Every {log_metrics_every} epochs")
         print(f"{'=' * 60}\n")
 
         for epoch in range(1, num_epochs + 1):
@@ -188,6 +258,18 @@ class Trainer:
 
             print(f"Train Loss: {train_loss:.5f} | Test Loss: {test_loss:.5f}")
 
+            # Calculate comprehensive metrics periodically
+            metrics = None
+            if epoch % log_metrics_every == 0 or epoch == num_epochs:
+                print("Calculating comprehensive metrics...")
+                metrics = self.calculate_validation_metrics()
+                self.test_metrics.append({"epoch": epoch, "metrics": metrics})
+
+                # Print metrics
+                print("\nValidation Metrics:")
+                for key, value in metrics.items():
+                    print(f"  {key.upper()}: {value:.4f}")
+
             # Log to wandb
             if self.use_wandb:
                 log_dict = {
@@ -196,6 +278,12 @@ class Trainer:
                     "test_loss": test_loss,
                     "learning_rate": self.lr,
                 }
+
+                # Add metrics if calculated
+                if metrics:
+                    for key, value in metrics.items():
+                        log_dict[f"val_{key}"] = value
+
                 wandb.log(log_dict)
 
             # Save checkpoint
@@ -217,6 +305,7 @@ class Trainer:
                 {
                     "train_losses": self.train_losses,
                     "test_losses": self.test_losses,
+                    "test_metrics": self.test_metrics,
                     "optimizer": self.optimizer_name,
                     "lr": self.lr,
                     "best_loss": self.best_loss,
@@ -229,7 +318,15 @@ class Trainer:
         print("Training Complete!")
         print(f"  Best Test Loss: {self.best_loss:.5f}")
         print(f"  Final Train Loss: {self.train_losses[-1]:.5f}")
-        print(f"  Model saved to: {self.save_dir}")
+
+        # Print final metrics if available
+        if self.test_metrics:
+            final_metrics = self.test_metrics[-1]["metrics"]
+            print(f"\nFinal Validation Metrics:")
+            for key, value in final_metrics.items():
+                print(f"  {key.upper()}: {value:.4f}")
+
+        print(f"\n  Model saved to: {self.save_dir}")
         print(f"{'=' * 60}\n")
 
         return self.train_losses, self.test_losses

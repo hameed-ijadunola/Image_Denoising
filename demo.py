@@ -68,15 +68,20 @@ def main():
 
     # Evaluate
     print("\nEvaluating model...")
-    avg_psnr_noisy, avg_psnr_denoised = evaluate_model(model, test_loader, device)
+    metrics_noisy, metrics_denoised = evaluate_model(model, test_loader, device)
 
     print("\n" + "=" * 70)
     print("RESULTS:")
     print("=" * 70)
-    print(f"Average Noisy PSNR:     {avg_psnr_noisy:.2f} dB")
-    print(f"Average Denoised PSNR:  {avg_psnr_denoised:.2f} dB")
-    print(f"PSNR Improvement:       +{avg_psnr_denoised - avg_psnr_noisy:.2f} dB")
-    print(f"Final Training Loss:    {train_losses[-1]:.5f}")
+    print("\nNoisy Images:")
+    for key, value in metrics_noisy.items():
+        print(f"  {key.upper()}: {value:.4f}")
+
+    print("\nDenoised Images:")
+    for key, value in metrics_denoised.items():
+        print(f"  {key.upper()}: {value:.4f}")
+
+    print(f"\nFinal Training Loss:    {train_losses[-1]:.5f}")
     print(f"Final Test Loss:        {test_losses[-1]:.5f}")
     print("=" * 70)
 

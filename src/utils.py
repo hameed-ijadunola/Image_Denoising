@@ -7,6 +7,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from math import log10
+from skimage.metrics import structural_similarity as ssim
+
+try:
+    import lpips
+
+    LPIPS_AVAILABLE = True
+except ImportError:
+    LPIPS_AVAILABLE = False
+    print("Warning: lpips not installed. Install with: pip install lpips")
+    print("LPIPS metric will not be available.")
 
 
 def calculate_psnr(img1, img2):
@@ -29,9 +39,127 @@ def calculate_psnr(img1, img2):
     return psnr
 
 
+def calculate_ssim(img1, img2):
+    """
+    Calculate Structural Similarity Index (SSIM) between two images
+
+    Args:
+        img1: First image tensor (B, C, H, W) or (C, H, W)
+        img2: Second image tensor (same shape as img1)
+
+    Returns:
+        SSIM value (0 to 1, higher is better)
+    """
+    # Convert to numpy and ensure proper shape
+    if len(img1.shape) == 4:  # Batch dimension
+        img1 = img1[0]
+        img2 = img2[0]
+
+    img1_np = img1.cpu().numpy()
+    img2_np = img2.cpu().numpy()
+
+    # SSIM expects (H, W, C) format
+    img1_np = np.transpose(img1_np, (1, 2, 0))
+    img2_np = np.transpose(img2_np, (1, 2, 0))
+
+    # Calculate SSIM
+    ssim_value = ssim(img1_np, img2_np, data_range=1.0, channel_axis=2)
+    return ssim_value
+
+
+def calculate_mse(img1, img2):
+    """
+    Calculate Mean Squared Error (MSE) between two images
+
+    Args:
+        img1: First image tensor (B, C, H, W) or (C, H, W)
+        img2: Second image tensor (same shape as img1)
+
+    Returns:
+        MSE value (lower is better)
+    """
+    mse = torch.mean((img1 - img2) ** 2).item()
+    return mse
+
+
+def calculate_mae(img1, img2):
+    """
+    Calculate Mean Absolute Error (MAE) between two images
+
+    Args:
+        img1: First image tensor (B, C, H, W) or (C, H, W)
+        img2: Second image tensor (same shape as img1)
+
+    Returns:
+        MAE value (lower is better)
+    """
+    mae = torch.mean(torch.abs(img1 - img2)).item()
+    return mae
+
+
+def calculate_lpips(img1, img2, lpips_model=None):
+    """
+    Calculate Learned Perceptual Image Patch Similarity (LPIPS)
+
+    Args:
+        img1: First image tensor (B, C, H, W) or (C, H, W)
+        img2: Second image tensor (same shape as img1)
+        lpips_model: Pre-initialized LPIPS model (optional)
+
+    Returns:
+        LPIPS value (lower is better, typically 0-1)
+    """
+    if not LPIPS_AVAILABLE:
+        return None
+
+    # Ensure batch dimension
+    if len(img1.shape) == 3:
+        img1 = img1.unsqueeze(0)
+        img2 = img2.unsqueeze(0)
+
+    # Initialize LPIPS model if not provided
+    if lpips_model is None:
+        lpips_model = lpips.LPIPS(net="alex").to(img1.device)
+
+    # LPIPS expects images in range [-1, 1]
+    img1_scaled = img1 * 2 - 1
+    img2_scaled = img2 * 2 - 1
+
+    with torch.no_grad():
+        lpips_value = lpips_model(img1_scaled, img2_scaled).item()
+
+    return lpips_value
+
+
+def calculate_all_metrics(img1, img2, lpips_model=None):
+    """
+    Calculate all metrics between two images
+
+    Args:
+        img1: First image tensor (B, C, H, W) or (C, H, W)
+        img2: Second image tensor (same shape as img1)
+        lpips_model: Pre-initialized LPIPS model (optional)
+
+    Returns:
+        Dictionary with all metric values
+    """
+    metrics = {
+        "psnr": calculate_psnr(img1, img2),
+        "ssim": calculate_ssim(img1, img2),
+        "mse": calculate_mse(img1, img2),
+        "mae": calculate_mae(img1, img2),
+    }
+
+    # Add LPIPS if available
+    if LPIPS_AVAILABLE:
+        metrics["lpips"] = calculate_lpips(img1, img2, lpips_model)
+
+    return metrics
+
+
 def evaluate_model(model, data_loader, device):
     """
-    Evaluate model on a dataset and calculate average PSNR
+    Evaluate model on a dataset and calculate average metrics
 
     Args:
         model: Trained U-Net model
@@ -39,12 +167,31 @@ def evaluate_model(model, data_loader, device):
         device: torch device
 
     Returns:
-        avg_psnr_noisy: Average PSNR of noisy images
-        avg_psnr_denoised: Average PSNR of denoised images
+        metrics_noisy: Dictionary with average metrics for noisy images
+        metrics_denoised: Dictionary with average metrics for denoised images
     """
     model.eval()
-    psnr_noisy_list = []
-    psnr_denoised_list = []
+
+    # Initialize metric lists
+    metrics_lists_noisy = {
+        "psnr": [],
+        "ssim": [],
+        "mse": [],
+        "mae": [],
+    }
+    metrics_lists_denoised = {
+        "psnr": [],
+        "ssim": [],
+        "mse": [],
+        "mae": [],
+    }
+
+    if LPIPS_AVAILABLE:
+        metrics_lists_noisy["lpips"] = []
+        metrics_lists_denoised["lpips"] = []
+        lpips_model = lpips.LPIPS(net="alex").to(device)
+    else:
+        lpips_model = None
 
     with torch.no_grad():
         for noisy_images, clean_images in data_loader:
@@ -54,23 +201,39 @@ def evaluate_model(model, data_loader, device):
             # Denoise images
             denoised_images = model(noisy_images)
 
-            # Calculate PSNR for each image in batch
+            # Calculate metrics for each image in batch
             for i in range(noisy_images.size(0)):
-                psnr_noisy = calculate_psnr(noisy_images[i], clean_images[i])
-                psnr_denoised = calculate_psnr(denoised_images[i], clean_images[i])
+                # Metrics for noisy images
+                metrics_noisy = calculate_all_metrics(
+                    noisy_images[i], clean_images[i], lpips_model
+                )
+                # Metrics for denoised images
+                metrics_denoised = calculate_all_metrics(
+                    denoised_images[i], clean_images[i], lpips_model
+                )
 
-                psnr_noisy_list.append(psnr_noisy)
-                psnr_denoised_list.append(psnr_denoised)
+                # Append to lists
+                for key in metrics_noisy:
+                    if metrics_noisy[key] is not None:
+                        metrics_lists_noisy[key].append(metrics_noisy[key])
+                for key in metrics_denoised:
+                    if metrics_denoised[key] is not None:
+                        metrics_lists_denoised[key].append(metrics_denoised[key])
 
-    avg_psnr_noisy = np.mean(psnr_noisy_list)
-    avg_psnr_denoised = np.mean(psnr_denoised_list)
+    # Calculate averages
+    avg_metrics_noisy = {
+        key: np.mean(values) for key, values in metrics_lists_noisy.items() if values
+    }
+    avg_metrics_denoised = {
+        key: np.mean(values) for key, values in metrics_lists_denoised.items() if values
+    }
 
-    return avg_psnr_noisy, avg_psnr_denoised
+    return avg_metrics_noisy, avg_metrics_denoised
 
 
 def visualize_denoising(model, data_loader, device, num_samples=5, save_path=None):
     """
-    Visualize denoising results
+    Visualize denoising results with multiple metrics
 
     Args:
         model: Trained U-Net model
@@ -80,6 +243,11 @@ def visualize_denoising(model, data_loader, device, num_samples=5, save_path=Non
         save_path: Path to save the figure
     """
     model.eval()
+
+    # Initialize LPIPS model if available
+    lpips_model = None
+    if LPIPS_AVAILABLE:
+        lpips_model = lpips.LPIPS(net="alex").to(device)
 
     # Get a batch of images
     noisy_images, clean_images = next(iter(data_loader))
@@ -109,27 +277,29 @@ def visualize_denoising(model, data_loader, device, num_samples=5, save_path=Non
         clean_img = np.clip(clean_img, 0, 1)
         denoised_img = np.clip(denoised_img, 0, 1)
 
-        # Calculate PSNR
-        psnr_noisy = calculate_psnr(
-            torch.from_numpy(noisy_np[i]), torch.from_numpy(clean_np[i])
+        # Calculate all metrics
+        metrics_noisy = calculate_all_metrics(
+            torch.from_numpy(noisy_np[i]), torch.from_numpy(clean_np[i]), lpips_model
         )
-        psnr_denoised = calculate_psnr(
-            torch.from_numpy(denoised_np[i]), torch.from_numpy(clean_np[i])
+        metrics_denoised = calculate_all_metrics(
+            torch.from_numpy(denoised_np[i]), torch.from_numpy(clean_np[i]), lpips_model
         )
 
         # Plot noisy image
         axes[i, 0].imshow(noisy_img)
-        axes[i, 0].set_title(f"Noisy (PSNR: {psnr_noisy:.2f} dB)")
+        title_noisy = f"Noisy\nPSNR: {metrics_noisy['psnr']:.2f} dB | SSIM: {metrics_noisy['ssim']:.3f}"
+        axes[i, 0].set_title(title_noisy, fontsize=9)
         axes[i, 0].axis("off")
 
         # Plot denoised image
         axes[i, 1].imshow(denoised_img)
-        axes[i, 1].set_title(f"Denoised (PSNR: {psnr_denoised:.2f} dB)")
+        title_denoised = f"Denoised\nPSNR: {metrics_denoised['psnr']:.2f} dB | SSIM: {metrics_denoised['ssim']:.3f}"
+        axes[i, 1].set_title(title_denoised, fontsize=9)
         axes[i, 1].axis("off")
 
         # Plot clean image
         axes[i, 2].imshow(clean_img)
-        axes[i, 2].set_title("Clean (Ground Truth)")
+        axes[i, 2].set_title("Clean (Ground Truth)", fontsize=9)
         axes[i, 2].axis("off")
 
     plt.tight_layout()
@@ -174,6 +344,7 @@ def plot_training_history(train_losses, test_losses, save_path=None):
 def plot_psnr_comparison(psnr_noisy, psnr_denoised, save_path=None):
     """
     Plot PSNR comparison between noisy and denoised images
+    (Legacy function - use plot_metrics_comparison for all metrics)
 
     Args:
         psnr_noisy: Average PSNR of noisy images
@@ -225,6 +396,137 @@ def plot_psnr_comparison(psnr_noisy, psnr_denoised, save_path=None):
     improvement = psnr_denoised - psnr_noisy
     print(f"\nPSNR Improvement: +{improvement:.2f} dB")
     print(f"Percentage Improvement: {(improvement / psnr_noisy) * 100:.2f}%")
+
+
+def plot_metrics_comparison(metrics_noisy, metrics_denoised, save_path=None):
+    """
+    Plot comprehensive metrics comparison between noisy and denoised images
+
+    Args:
+        metrics_noisy: Dictionary with average metrics for noisy images
+        metrics_denoised: Dictionary with average metrics for denoised images
+        save_path: Path to save the figure
+    """
+    # Define metric properties (name, higher_is_better, unit)
+    metric_info = {
+        "psnr": ("PSNR", True, "dB"),
+        "ssim": ("SSIM", True, ""),
+        "mse": ("MSE", False, ""),
+        "mae": ("MAE", False, ""),
+        "lpips": ("LPIPS", False, ""),
+    }
+
+    # Filter available metrics
+    available_metrics = [k for k in metric_info.keys() if k in metrics_noisy]
+    n_metrics = len(available_metrics)
+
+    # Create subplots
+    fig, axes = plt.subplots(1, n_metrics, figsize=(5 * n_metrics, 5))
+    if n_metrics == 1:
+        axes = [axes]
+
+    for idx, metric_key in enumerate(available_metrics):
+        metric_name, higher_is_better, unit = metric_info[metric_key]
+
+        noisy_val = metrics_noisy[metric_key]
+        denoised_val = metrics_denoised[metric_key]
+
+        categories = ["Noisy", "Denoised"]
+        values = [noisy_val, denoised_val]
+
+        # Choose colors based on improvement
+        if higher_is_better:
+            colors = (
+                ["#ff6b6b", "#4ecdc4"]
+                if denoised_val > noisy_val
+                else ["#4ecdc4", "#ff6b6b"]
+            )
+        else:
+            colors = (
+                ["#ff6b6b", "#4ecdc4"]
+                if denoised_val < noisy_val
+                else ["#4ecdc4", "#ff6b6b"]
+            )
+
+        # Plot bars
+        bars = axes[idx].bar(
+            categories,
+            values,
+            color=colors,
+            alpha=0.8,
+            edgecolor="black",
+            linewidth=1.5,
+        )
+
+        # Add value labels on bars
+        for bar, val in zip(bars, values):
+            label_text = (
+                f"{val:.4f}" if metric_key in ["mse", "mae", "lpips"] else f"{val:.2f}"
+            )
+            if unit:
+                label_text += f" {unit}"
+            axes[idx].text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() * 1.02,
+                label_text,
+                ha="center",
+                va="bottom",
+                fontsize=10,
+                fontweight="bold",
+            )
+
+        # Set labels and title
+        ylabel = f"{metric_name}"
+        if unit:
+            ylabel += f" ({unit})"
+        axes[idx].set_ylabel(ylabel, fontsize=11)
+        axes[idx].set_title(metric_name, fontsize=12, fontweight="bold")
+        axes[idx].grid(True, axis="y", alpha=0.3)
+
+        # Set y-axis limits
+        max_val = max(values)
+        axes[idx].set_ylim(0, max_val * 1.15)
+
+    plt.suptitle(
+        "Metrics Comparison: Noisy vs Denoised Images",
+        fontsize=14,
+        fontweight="bold",
+        y=1.02,
+    )
+    plt.tight_layout()
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Metrics comparison plot saved to: {save_path}")
+
+    plt.show()
+
+    # Print improvements
+    print("\n" + "=" * 60)
+    print("Metric Improvements:")
+    print("=" * 60)
+    for metric_key in available_metrics:
+        metric_name, higher_is_better, unit = metric_info[metric_key]
+        noisy_val = metrics_noisy[metric_key]
+        denoised_val = metrics_denoised[metric_key]
+
+        if higher_is_better:
+            improvement = denoised_val - noisy_val
+            pct_improvement = (improvement / noisy_val) * 100
+            sign = "+"
+        else:
+            improvement = noisy_val - denoised_val
+            pct_improvement = (improvement / noisy_val) * 100
+            sign = "-" if improvement < 0 else "+"
+
+        unit_str = f" {unit}" if unit else ""
+        print(
+            f"{metric_name:8} | Noisy: {noisy_val:.4f}{unit_str} | "
+            f"Denoised: {denoised_val:.4f}{unit_str} | "
+            f"Improvement: {sign}{abs(improvement):.4f} ({pct_improvement:+.2f}%)"
+        )
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

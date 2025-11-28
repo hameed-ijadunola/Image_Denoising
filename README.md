@@ -15,9 +15,21 @@ This project demonstrates the effectiveness of deep convolutional neural network
 - **U-Net Architecture**: Implementation of the classic U-Net with encoder-decoder structure and skip connections
 - **Multiple Noise Types**: Support for Gaussian, Poisson, and Salt & Pepper noise
 - **Multiple Optimizers**: Comparison of Adam, RMSprop, and SGD optimizers
-- **Comprehensive Evaluation**: PSNR (Peak Signal-to-Noise Ratio) metrics and visualizations
+- **Comprehensive Metrics**: PSNR, SSIM, MSE, MAE, and LPIPS for thorough quality evaluation
 - **Flexible Training**: Configurable hyperparameters including learning rate, batch size, epochs, and dropout
 - **Weights & Biases Integration**: Experiment tracking, visualization, and model versioning with wandb
+
+## Image Quality Metrics
+
+This project evaluates denoising performance using **5 comprehensive metrics**:
+
+1. **PSNR** (Peak Signal-to-Noise Ratio) - Classic metric, measures pixel-wise accuracy
+2. **SSIM** (Structural Similarity Index) - Measures structural similarity, better perceptual correlation
+3. **MSE** (Mean Squared Error) - Average squared pixel differences
+4. **MAE** (Mean Absolute Error) - Average absolute pixel differences
+5. **LPIPS** (Learned Perceptual Image Patch Similarity) - Deep learning-based perceptual metric
+
+See [METRICS_GUIDE.md](METRICS_GUIDE.md) for detailed information about each metric, interpretation guidelines, and usage examples.
 
 ## Project Structure
 
