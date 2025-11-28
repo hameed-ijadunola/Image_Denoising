@@ -8,15 +8,7 @@ import matplotlib.pyplot as plt
 import os
 from math import log10
 from skimage.metrics import structural_similarity as ssim
-
-try:
-    import lpips
-
-    LPIPS_AVAILABLE = True
-except ImportError:
-    LPIPS_AVAILABLE = False
-    print("Warning: lpips not installed. Install with: pip install lpips")
-    print("LPIPS metric will not be available.")
+import lpips
 
 
 def calculate_psnr(img1, img2):
@@ -109,9 +101,6 @@ def calculate_lpips(img1, img2, lpips_model=None):
     Returns:
         LPIPS value (lower is better, typically 0-1)
     """
-    if not LPIPS_AVAILABLE:
-        return None
-
     # Ensure batch dimension
     if len(img1.shape) == 3:
         img1 = img1.unsqueeze(0)
@@ -120,6 +109,16 @@ def calculate_lpips(img1, img2, lpips_model=None):
     # Initialize LPIPS model if not provided
     if lpips_model is None:
         lpips_model = lpips.LPIPS(net="alex").to(img1.device)
+
+    # Assert device consistency - fail fast if tensors on wrong device
+    assert img1.device == img2.device, f"img1 on {img1.device}, img2 on {img2.device}"
+
+    # Get the device of the lpips model's parameters
+    lpips_device = next(lpips_model.parameters()).device
+    assert img1.device == lpips_device, (
+        f"Input tensors on {img1.device} but LPIPS model on {lpips_device}. "
+        f"Tensors must be on same device as model."
+    )
 
     # LPIPS expects images in range [-1, 1]
     img1_scaled = img1 * 2 - 1
@@ -141,18 +140,17 @@ def calculate_all_metrics(img1, img2, lpips_model=None):
         lpips_model: Pre-initialized LPIPS model (optional)
 
     Returns:
-        Dictionary with all metric values
+        Dictionary with all metric values (as Python float)
     """
+    # Calculate metrics and ensure they're Python native floats (not numpy types)
+    # This prevents JSON serialization errors
     metrics = {
-        "psnr": calculate_psnr(img1, img2),
-        "ssim": calculate_ssim(img1, img2),
-        "mse": calculate_mse(img1, img2),
-        "mae": calculate_mae(img1, img2),
+        "psnr": float(calculate_psnr(img1, img2)),
+        "ssim": float(calculate_ssim(img1, img2)),
+        "mse": float(calculate_mse(img1, img2)),
+        "mae": float(calculate_mae(img1, img2)),
+        "lpips": float(calculate_lpips(img1, img2, lpips_model)),
     }
-
-    # Add LPIPS if available
-    if LPIPS_AVAILABLE:
-        metrics["lpips"] = calculate_lpips(img1, img2, lpips_model)
 
     return metrics
 
@@ -178,20 +176,17 @@ def evaluate_model(model, data_loader, device):
         "ssim": [],
         "mse": [],
         "mae": [],
+        "lpips": [],
     }
     metrics_lists_denoised = {
         "psnr": [],
         "ssim": [],
         "mse": [],
         "mae": [],
+        "lpips": [],
     }
 
-    if LPIPS_AVAILABLE:
-        metrics_lists_noisy["lpips"] = []
-        metrics_lists_denoised["lpips"] = []
-        lpips_model = lpips.LPIPS(net="alex").to(device)
-    else:
-        lpips_model = None
+    lpips_model = lpips.LPIPS(net="alex").to(device)
 
     with torch.no_grad():
         for noisy_images, clean_images in data_loader:
@@ -220,12 +215,16 @@ def evaluate_model(model, data_loader, device):
                     if metrics_denoised[key] is not None:
                         metrics_lists_denoised[key].append(metrics_denoised[key])
 
-    # Calculate averages
+    # Calculate averages and convert to Python float for JSON serialization
     avg_metrics_noisy = {
-        key: np.mean(values) for key, values in metrics_lists_noisy.items() if values
+        key: float(np.mean(values))
+        for key, values in metrics_lists_noisy.items()
+        if values
     }
     avg_metrics_denoised = {
-        key: np.mean(values) for key, values in metrics_lists_denoised.items() if values
+        key: float(np.mean(values))
+        for key, values in metrics_lists_denoised.items()
+        if values
     }
 
     return avg_metrics_noisy, avg_metrics_denoised
@@ -244,10 +243,8 @@ def visualize_denoising(model, data_loader, device, num_samples=5, save_path=Non
     """
     model.eval()
 
-    # Initialize LPIPS model if available
-    lpips_model = None
-    if LPIPS_AVAILABLE:
-        lpips_model = lpips.LPIPS(net="alex").to(device)
+    # Initialize LPIPS model
+    lpips_model = lpips.LPIPS(net="alex").to(device)
 
     # Get a batch of images
     noisy_images, clean_images = next(iter(data_loader))
@@ -277,12 +274,13 @@ def visualize_denoising(model, data_loader, device, num_samples=5, save_path=Non
         clean_img = np.clip(clean_img, 0, 1)
         denoised_img = np.clip(denoised_img, 0, 1)
 
-        # Calculate all metrics
+        # Calculate all metrics using original tensors (on correct device)
+        # Don't convert to numpy and back - this puts tensors on CPU
         metrics_noisy = calculate_all_metrics(
-            torch.from_numpy(noisy_np[i]), torch.from_numpy(clean_np[i]), lpips_model
+            noisy_images[i], clean_images[i], lpips_model
         )
         metrics_denoised = calculate_all_metrics(
-            torch.from_numpy(denoised_np[i]), torch.from_numpy(clean_np[i]), lpips_model
+            denoised_images[i], clean_images[i], lpips_model
         )
 
         # Plot noisy image

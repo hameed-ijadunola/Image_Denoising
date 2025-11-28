@@ -292,6 +292,59 @@ Based on the original paper's discussion:
 4. **Different Datasets**: Test on medical imaging datasets
 5. **Advanced Architectures**: Implement residual U-Net or attention mechanisms
 
+## 🆕 Model and Dataset Tracking System
+
+This project now includes a comprehensive tracking system for managing multiple models, datasets, and techniques!
+
+### Key Features
+
+- ✅ **Model Registry**: Track deep learning models (U-Net, DnCNN) and traditional methods (NLM, Bilateral, Wavelet)
+- ✅ **Dataset Registry**: Manage multiple datasets (CIFAR-10, BSD68, custom datasets)
+- ✅ **Experiment Tracking**: Complete metadata for all experiments
+- ✅ **Easy Extensibility**: Add new models/datasets by editing a config file
+
+### Quick Start
+
+```python
+from config import MODEL_REGISTRY, DATASET_REGISTRY
+from src.registry import get_model_from_registry, get_dataset_from_registry
+
+# Get a model
+model = get_model_from_registry("unet", MODEL_REGISTRY)
+
+# Get a dataset
+dataset = get_dataset_from_registry("cifar10", DATASET_REGISTRY, train=True)
+```
+
+### Documentation
+
+- **[QUICKSTART_TRACKING.md](QUICKSTART_TRACKING.md)** - Quick introduction and basic usage
+- **[TRACKING_SYSTEM.md](TRACKING_SYSTEM.md)** - Complete system overview
+- **[REGISTRY_GUIDE.md](REGISTRY_GUIDE.md)** - Detailed examples for adding models and datasets
+- **[src/traditional/template.py](src/traditional/template.py)** - Template for traditional methods
+
+### Test the System
+
+```bash
+python test_registry.py
+```
+
+All tests should pass with: `🎉 All tests PASSED!`
+
+### Adding New Models
+
+**Deep Learning** (requires training):
+1. Create model class inheriting from `DeepLearningModel`
+2. Add to `MODEL_REGISTRY` in `config.py`
+3. Use with the registry system
+
+**Traditional Methods** (no training):
+1. Create method class inheriting from `TraditionalMethod`
+2. Add to `MODEL_REGISTRY` in `config.py`
+3. Use directly (no training needed!)
+
+See `REGISTRY_GUIDE.md` for complete examples.
+
 ## References
 
 1. Ronneberger, O., Fischer, P., & Brox, T. (2015). "U-Net: Convolutional Networks for Biomedical Image Segmentation". arXiv:1505.04597

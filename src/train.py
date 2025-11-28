@@ -10,21 +10,8 @@ import os
 import json
 from datetime import datetime
 from .utils import calculate_all_metrics
-
-try:
-    import wandb
-
-    WANDB_AVAILABLE = True
-except ImportError:
-    WANDB_AVAILABLE = False
-    print("Warning: wandb not installed. Install with: pip install wandb")
-
-try:
-    import lpips
-
-    LPIPS_AVAILABLE = True
-except ImportError:
-    LPIPS_AVAILABLE = False
+import wandb
+import lpips
 
 
 class Trainer:
@@ -43,6 +30,8 @@ class Trainer:
         save_dir="./models",
         use_wandb=False,
         wandb_config=None,
+        model_metadata=None,
+        dataset_metadata=None,
     ):
         """
         Args:
@@ -55,6 +44,8 @@ class Trainer:
             save_dir: Directory to save models
             use_wandb: Whether to use Weights & Biases logging
             wandb_config: Dictionary with wandb configuration options
+            model_metadata: Dictionary with model information (name, type, etc.)
+            dataset_metadata: Dictionary with dataset information (name, type, etc.)
         """
         self.model = model.to(device)
         self.device = device
@@ -62,7 +53,11 @@ class Trainer:
         self.test_loader = test_loader
         self.save_dir = save_dir
         self.lr = lr
-        self.use_wandb = use_wandb and WANDB_AVAILABLE
+        self.use_wandb = use_wandb
+
+        # Store metadata
+        self.model_metadata = model_metadata or {}
+        self.dataset_metadata = dataset_metadata or {}
 
         # Wandb configuration
         if self.use_wandb and wandb_config is None:
@@ -89,10 +84,8 @@ class Trainer:
         self.test_metrics = []  # Store metrics for each epoch
         self.best_loss = float("inf")
 
-        # Initialize LPIPS model if available
-        self.lpips_model = None
-        if LPIPS_AVAILABLE:
-            self.lpips_model = lpips.LPIPS(net="alex").to(device)
+        # Initialize LPIPS model
+        self.lpips_model = lpips.LPIPS(net="alex").to(device)
 
         # Create save directory
         os.makedirs(save_dir, exist_ok=True)
@@ -168,10 +161,8 @@ class Trainer:
             "ssim": [],
             "mse": [],
             "mae": [],
+            "lpips": [],
         }
-
-        if LPIPS_AVAILABLE:
-            metrics_lists["lpips"] = []
 
         with torch.no_grad():
             for batch_idx, (noisy_images, clean_images) in enumerate(self.test_loader):
@@ -205,15 +196,22 @@ class Trainer:
         return avg_metrics
 
     def save_checkpoint(self, epoch, is_best=False, is_last=False):
-        """Save model checkpoint"""
+        """Save model checkpoint with metadata"""
         checkpoint = {
             "epoch": epoch,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "train_losses": self.train_losses,
             "test_losses": self.test_losses,
+            "test_metrics": self.test_metrics,
             "optimizer_name": self.optimizer_name,
             "lr": self.lr,
+            # Add metadata for tracking
+            "model_metadata": self.model_metadata,
+            "dataset_metadata": self.dataset_metadata,
+            "model_info": self.model.get_info()
+            if hasattr(self.model, "get_info")
+            else {},
         }
 
         # Save best model
@@ -302,19 +300,19 @@ class Trainer:
 
         # Save training history
         history_path = os.path.join(self.save_dir, "training_history.json")
+
+        # Ensure all numeric values are JSON-serializable Python types
+        history_data = {
+            "train_losses": [float(x) for x in self.train_losses],
+            "test_losses": [float(x) for x in self.test_losses],
+            "test_metrics": self.test_metrics,  # Already converted in calculate_all_metrics
+            "optimizer": self.optimizer_name,
+            "lr": float(self.lr),
+            "best_loss": float(self.best_loss),
+        }
+
         with open(history_path, "w") as f:
-            json.dump(
-                {
-                    "train_losses": self.train_losses,
-                    "test_losses": self.test_losses,
-                    "test_metrics": self.test_metrics,
-                    "optimizer": self.optimizer_name,
-                    "lr": self.lr,
-                    "best_loss": self.best_loss,
-                },
-                f,
-                indent=4,
-            )
+            json.dump(history_data, f, indent=4)
 
         print(f"\n{'=' * 60}")
         print("Training Complete!")

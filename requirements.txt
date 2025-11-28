@@ -7,3 +7,5 @@ tqdm>=4.65.0
 scikit-image>=0.20.0
 wandb>=0.16.0
 lpips>=0.1.4
+pytz>=2024.0
+pandas>=2.0.0

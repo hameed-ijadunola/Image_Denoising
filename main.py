@@ -17,14 +17,7 @@ from src.utils import (
     plot_metrics_comparison,
 )
 from config import WANDB_CONFIG
-
-try:
-    import wandb
-
-    WANDB_AVAILABLE = True
-except ImportError:
-    WANDB_AVAILABLE = False
-    print("Warning: wandb not installed. Install with: pip install wandb")
+import wandb
 
 
 def train_model(args):
@@ -34,7 +27,7 @@ def train_model(args):
     print("=" * 70)
 
     # Setup wandb
-    use_wandb = args.use_wandb and WANDB_AVAILABLE
+    use_wandb = args.use_wandb
     if use_wandb:
         run_name = f"{args.noise_type}_{args.optimizer}_lr{args.lr}"
         wandb.init(
@@ -187,18 +180,39 @@ def train_model(args):
 
     # Save results summary
     results = {
-        "noise_type": args.noise_type,
-        "noise_param": args.noise_param,
-        "optimizer": args.optimizer,
-        "learning_rate": args.lr,
-        "epochs": args.epochs,
-        "batch_size": args.batch_size,
-        "dropout": args.dropout,
-        "metrics_noisy": {k: float(v) for k, v in metrics_noisy.items()},
-        "metrics_denoised": {k: float(v) for k, v in metrics_denoised.items()},
-        "final_train_loss": float(train_losses[-1]),
-        "final_test_loss": float(test_losses[-1]),
-        "best_test_loss": float(trainer.best_loss),
+        # Model metadata
+        "model": {
+            "name": "U-Net",
+            "type": "deep_learning",
+            "architecture": "U-Net",
+            "parameters": sum(p.numel() for p in model.parameters()),
+        },
+        # Dataset metadata
+        "dataset": {
+            "name": "CIFAR-10",
+            "type": "cifar10",
+            "num_train": len(train_loader.dataset),
+            "num_test": len(test_loader.dataset),
+        },
+        # Training configuration
+        "training": {
+            "noise_type": args.noise_type,
+            "noise_param": args.noise_param,
+            "optimizer": args.optimizer,
+            "learning_rate": args.lr,
+            "epochs": args.epochs,
+            "batch_size": args.batch_size,
+            "dropout": args.dropout,
+            "bilinear": args.bilinear,
+        },
+        # Results
+        "results": {
+            "metrics_noisy": {k: float(v) for k, v in metrics_noisy.items()},
+            "metrics_denoised": {k: float(v) for k, v in metrics_denoised.items()},
+            "final_train_loss": float(train_losses[-1]),
+            "final_test_loss": float(test_losses[-1]),
+            "best_test_loss": float(trainer.best_loss),
+        },
     }
 
     results_path = os.path.join(

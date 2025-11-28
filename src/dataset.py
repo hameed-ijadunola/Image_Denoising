@@ -5,10 +5,11 @@ Dataset utilities for CIFAR-10 with noise injection
 import torch
 import numpy as np
 from torchvision import datasets, transforms
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
+from .base_dataset import BaseDenoisingDataset
 
 
-class NoisyCIFAR10(Dataset):
+class NoisyCIFAR10(BaseDenoisingDataset):
     """
     CIFAR-10 dataset with added noise for denoising tasks
     """
@@ -29,6 +30,15 @@ class NoisyCIFAR10(Dataset):
             noise_param (float): Noise parameter (sigma for gaussian, lambda for poisson, probability for salt_pepper)
             download (bool): If True, downloads the dataset
         """
+        super().__init__(
+            name="CIFAR-10",
+            description="CIFAR-10 dataset (32x32 color images, 10 classes)",
+            root=root,
+            train=train,
+            noise_type=noise_type,
+            noise_param=noise_param,
+            download=download,
+        )
         self.noise_type = noise_type
         self.noise_param = noise_param
 
@@ -85,6 +95,10 @@ class NoisyCIFAR10(Dataset):
             raise ValueError(f"Unknown noise type: {self.noise_type}")
 
         return noisy_image, clean_image
+
+    def get_sample_shape(self):
+        """Return the shape of CIFAR-10 images: (3, 32, 32)"""
+        return (3, 32, 32)
 
 
 def get_dataloaders(

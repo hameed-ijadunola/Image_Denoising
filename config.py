@@ -3,7 +3,162 @@ Configuration file for experiments
 Modify these settings and run: python run_experiment.py
 """
 
-# Experiment configurations
+# ============================================================================
+# MODEL REGISTRY
+# ============================================================================
+# Register all available denoising models and techniques here
+# Add new models/techniques as you implement them
+
+MODEL_REGISTRY = {
+    "unet": {
+        "name": "U-Net",
+        "type": "deep_learning",
+        "class": "UNet",  # Class name in src/unet.py
+        "module": "src.unet",  # Import path
+        "description": "U-Net Convolutional Network for Image Denoising",
+        "paper": "Ronneberger et al., 2015",
+        "requires_training": True,
+        "default_params": {
+            "n_channels": 3,
+            "n_classes": 3,
+            "bilinear": False,
+            "dropout_rate": 0.2,
+        },
+    },
+    # Example: Add more deep learning models
+    # "dncnn": {
+    #     "name": "DnCNN",
+    #     "type": "deep_learning",
+    #     "class": "DnCNN",
+    #     "module": "src.dncnn",
+    #     "description": "Denoising Convolutional Neural Network",
+    #     "paper": "Zhang et al., 2017",
+    #     "requires_training": True,
+    #     "default_params": {...},
+    # },
+    # Example: Traditional methods (no training needed)
+    # "nlm": {
+    #     "name": "Non-Local Means",
+    #     "type": "traditional",
+    #     "class": "NonLocalMeans",
+    #     "module": "src.traditional.nlm",
+    #     "description": "Non-Local Means denoising filter",
+    #     "paper": "Buades et al., 2005",
+    #     "requires_training": False,
+    #     "default_params": {
+    #         "h": 10,
+    #         "template_window_size": 7,
+    #         "search_window_size": 21,
+    #     },
+    # },
+    # "bilateral": {
+    #     "name": "Bilateral Filter",
+    #     "type": "traditional",
+    #     "class": "BilateralFilter",
+    #     "module": "src.traditional.bilateral",
+    #     "description": "Bilateral filtering for edge-preserving denoising",
+    #     "paper": "Tomasi and Manduchi, 1998",
+    #     "requires_training": False,
+    #     "default_params": {
+    #         "d": 9,
+    #         "sigma_color": 75,
+    #         "sigma_space": 75,
+    #     },
+    # },
+    # "wavelet": {
+    #     "name": "Wavelet Denoising",
+    #     "type": "traditional",
+    #     "class": "WaveletDenoising",
+    #     "module": "src.traditional.wavelet",
+    #     "description": "Wavelet-based denoising using soft thresholding",
+    #     "paper": "Donoho, 1995",
+    #     "requires_training": False,
+    #     "default_params": {
+    #         "wavelet": "db1",
+    #         "mode": "soft",
+    #         "level": None,
+    #     },
+    # },
+}
+
+# ============================================================================
+# DATASET REGISTRY
+# ============================================================================
+# Register all available datasets here
+
+DATASET_REGISTRY = {
+    "cifar10": {
+        "name": "CIFAR-10",
+        "class": "NoisyCIFAR10",
+        "module": "src.dataset",
+        "description": "CIFAR-10 dataset (32x32 color images, 10 classes)",
+        "image_size": (32, 32),
+        "channels": 3,
+        "num_classes": 10,
+        "num_train": 50000,
+        "num_test": 10000,
+        "default_params": {
+            "root": "./data",
+            "noise_type": "gaussian",
+            "noise_param": 0.05,
+            "download": True,
+        },
+    },
+    # Example: Add more datasets as you implement them
+    # "bsd68": {
+    #     "name": "BSD68",
+    #     "class": "BSD68Dataset",
+    #     "module": "src.datasets.bsd68",
+    #     "description": "68 grayscale test images from Berkeley Segmentation Dataset",
+    #     "image_size": None,  # Variable sizes
+    #     "channels": 1,
+    #     "num_test": 68,
+    #     "default_params": {...},
+    # },
+    # "set12": {
+    #     "name": "Set12",
+    #     "class": "Set12Dataset",
+    #     "module": "src.datasets.set12",
+    #     "description": "12 widely used test images",
+    #     "image_size": None,
+    #     "channels": 1,
+    #     "num_test": 12,
+    #     "default_params": {...},
+    # },
+}
+
+# ============================================================================
+# NOISE TYPE REGISTRY
+# ============================================================================
+# Available noise types and their parameters
+
+NOISE_REGISTRY = {
+    "gaussian": {
+        "name": "Gaussian Noise",
+        "param_name": "sigma",
+        "param_description": "Standard deviation of noise",
+        "default_param": 0.05,
+        "param_range": (0.01, 0.15),
+    },
+    "poisson": {
+        "name": "Poisson Noise",
+        "param_name": "lambda",
+        "param_description": "Poisson rate parameter",
+        "default_param": 1.0,
+        "param_range": (0.5, 2.0),
+    },
+    "salt_pepper": {
+        "name": "Salt & Pepper Noise",
+        "param_name": "probability",
+        "param_description": "Probability of corrupted pixels",
+        "default_param": 0.05,
+        "param_range": (0.01, 0.1),
+    },
+}
+
+# ============================================================================
+# EXPERIMENT CONFIGURATIONS
+# ============================================================================
 EXPERIMENTS = {
     # Optimizer comparison (as in the paper)
     "optimizer_comparison": [
@@ -81,15 +236,23 @@ EXPERIMENTS = {
 
 # Default training configuration
 DEFAULT_CONFIG = {
+    # Model configuration
+    "model": "unet",  # Key from MODEL_REGISTRY
+    # Dataset configuration
+    "dataset": "cifar10",  # Key from DATASET_REGISTRY
+    # Training parameters
     "epochs": 5,
     "batch_size": 16,
     "lr": 0.001,
     "optimizer": "adam",
+    # Noise configuration
     "noise_type": "gaussian",
     "noise_param": 0.05,
+    # Model-specific parameters
     "dropout": 0.2,
-    "num_workers": 2,
     "bilinear": False,
+    # System parameters
+    "num_workers": 2,
 }
 
 # Weights & Biases configuration

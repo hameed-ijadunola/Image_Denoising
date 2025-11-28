@@ -6,6 +6,7 @@ Based on: "U-Net: Convolutional Networks for Biomedical Image Segmentation"
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .base_model import DeepLearningModel
 
 
 class DoubleConv(nn.Module):
@@ -80,13 +81,15 @@ class OutConv(nn.Module):
         return self.conv(x)
 
 
-class UNet(nn.Module):
+class UNet(DeepLearningModel):
     """
     U-Net model for image denoising
     """
 
     def __init__(self, n_channels=3, n_classes=3, bilinear=False, dropout_rate=0.2):
-        super(UNet, self).__init__()
+        super(UNet, self).__init__(
+            name="U-Net", description="U-Net Convolutional Network for Image Denoising"
+        )
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear

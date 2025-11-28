@@ -24,14 +24,7 @@ from utils import (
     visualize_denoising,
 )
 from config import EXPERIMENTS, DEFAULT_CONFIG, WANDB_CONFIG
-
-try:
-    import wandb
-
-    WANDB_AVAILABLE = True
-except ImportError:
-    WANDB_AVAILABLE = False
-    print("Warning: wandb not installed. Install with: pip install wandb")
+import wandb
 
 
 def run_single_experiment(config, experiment_name, use_wandb=False):
@@ -45,7 +38,7 @@ def run_single_experiment(config, experiment_name, use_wandb=False):
     print("=" * 80 + "\n")
 
     # Initialize wandb
-    if use_wandb and WANDB_AVAILABLE:
+    if use_wandb:
         wandb.init(
             project=WANDB_CONFIG.get("project", "image-denoising-unet"),
             entity=WANDB_CONFIG.get("entity", None),
@@ -105,7 +98,7 @@ def run_single_experiment(config, experiment_name, use_wandb=False):
         optimizer_name=config.get("optimizer", DEFAULT_CONFIG["optimizer"]),
         lr=config.get("lr", DEFAULT_CONFIG["lr"]),
         save_dir=save_dir,
-        use_wandb=use_wandb and WANDB_AVAILABLE,
+        use_wandb=use_wandb,
         wandb_config=wandb_config,
     )
 
@@ -119,7 +112,7 @@ def run_single_experiment(config, experiment_name, use_wandb=False):
     avg_psnr_noisy, avg_psnr_denoised = evaluate_model(model, test_loader, device)
 
     # Log to wandb
-    if use_wandb and WANDB_AVAILABLE:
+    if use_wandb:
         wandb.log(
             {
                 "final_psnr_noisy": avg_psnr_noisy,
@@ -167,7 +160,7 @@ def run_single_experiment(config, experiment_name, use_wandb=False):
     )
 
     # Log visualizations to wandb
-    if use_wandb and WANDB_AVAILABLE and WANDB_CONFIG.get("log_images", True):
+    if use_wandb and WANDB_CONFIG.get("log_images", True):
         wandb.log(
             {
                 "training_loss_curve": wandb.Image(
@@ -197,7 +190,7 @@ def run_single_experiment(config, experiment_name, use_wandb=False):
     print("=" * 80 + "\n")
 
     # Finish wandb run
-    if use_wandb and WANDB_AVAILABLE:
+    if use_wandb:
         wandb.finish()
 
     return results
@@ -214,9 +207,7 @@ def run_experiment_suite(suite_name, use_wandb=False):
     print("\n" + "=" * 80)
     print(f"RUNNING EXPERIMENT SUITE: {suite_name}")
     print(f"Total experiments: {len(experiments)}")
-    print(
-        f"Wandb logging: {'Enabled' if use_wandb and WANDB_AVAILABLE else 'Disabled'}"
-    )
+    print(f"Wandb logging: {'Enabled' if use_wandb else 'Disabled'}")
     print("=" * 80)
 
     all_results = []
