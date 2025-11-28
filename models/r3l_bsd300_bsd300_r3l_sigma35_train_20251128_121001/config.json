@@ -1,0 +1,11 @@
+{
+    "name": "bsd300_r3l_sigma35_train",
+    "model": "r3l",
+    "dataset": "bsd300",
+    "epochs": 50,
+    "optimizer": "adam",
+    "lr": 0.001,
+    "noise_type": "gaussian",
+    "noise_param": 0.35,
+    "batch_size": 16
+}

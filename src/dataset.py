@@ -6,7 +6,7 @@ import torch
 import numpy as np
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-from .base_dataset import BaseDenoisingDataset
+from src.base_dataset import BaseDenoisingDataset
 
 
 class NoisyCIFAR10(BaseDenoisingDataset):

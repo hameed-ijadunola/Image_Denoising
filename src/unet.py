@@ -6,7 +6,7 @@ Based on: "U-Net: Convolutional Networks for Biomedical Image Segmentation"
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .base_model import DeepLearningModel
+from src.base_model import DeepLearningModel
 
 
 class DoubleConv(nn.Module):

@@ -8,8 +8,8 @@ import torch.optim as optim
 from tqdm import tqdm
 import os
 import json
-from datetime import datetime
-from .utils import calculate_all_metrics
+
+from src.utils import calculate_all_metrics
 import wandb
 import lpips
 
@@ -339,7 +339,7 @@ class Trainer:
         # Print final metrics if available
         if self.test_metrics:
             final_metrics = self.test_metrics[-1]["metrics"]
-            print(f"\nFinal Validation Metrics:")
+            print("\nFinal Validation Metrics:")
             for key, value in final_metrics.items():
                 print(f"  {key.upper()}: {value:.4f}")
 

@@ -103,6 +103,21 @@ MODEL_REGISTRY = {
 # Register all available datasets here
 
 DATASET_REGISTRY = {
+    "bsd300": {
+        "name": "BSD300",
+        "class": "BSD300Dataset",
+        "module": "src.bsd300_dataset",
+        "description": "BSD300 grayscale images for denoising",
+        "image_size": None,  # Variable sizes
+        "channels": 1,
+        "num_train": 200,  # BSD300 train images
+        "default_params": {
+            "root": "./data/BSD300/images/train",
+            "noise_type": "gaussian",
+            "noise_param": 0.05,
+            "download": False,
+        },
+    },
     "cifar10": {
         "name": "CIFAR-10",
         "class": "NoisyCIFAR10",
@@ -120,17 +135,21 @@ DATASET_REGISTRY = {
             "download": True,
         },
     },
-    # Example: Add more datasets as you implement them
-    # "bsd68": {
-    #     "name": "BSD68",
-    #     "class": "BSD68Dataset",
-    #     "module": "src.datasets.bsd68",
-    #     "description": "68 grayscale test images from Berkeley Segmentation Dataset",
-    #     "image_size": None,  # Variable sizes
-    #     "channels": 1,
-    #     "num_test": 68,
-    #     "default_params": {...},
-    # },
+    "bsd68": {
+        "name": "BSD68",
+        "class": "BSD68Dataset",
+        "module": "src.bsd68_dataset",
+        "description": "68 grayscale test images from Berkeley Segmentation Dataset",
+        "image_size": None,  # Variable sizes
+        "channels": 1,
+        "num_test": 68,
+        "default_params": {
+            "root": "./data/BSD68",
+            "noise_type": "gaussian",
+            "noise_param": 0.05,
+            "download": False,
+        },
+    },
     # "set12": {
     #     "name": "Set12",
     #     "class": "Set12Dataset",
@@ -176,6 +195,126 @@ NOISE_REGISTRY = {
 # EXPERIMENT CONFIGURATIONS
 # ============================================================================
 EXPERIMENTS = {
+    # BSD68 test experiments for R3L replication (models trained on BSD300)
+    "bsd68_r3l_test_sigma25": [
+        {
+            "name": "bsd68_r3l_test_sigma15",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.15,
+            "batch_size": 1,
+        },
+        {
+            "name": "bsd68_r3l_test_sigma20",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.20,
+            "batch_size": 1,
+        },
+        {
+            "name": "bsd68_r3l_test_sigma25",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.25,
+            "batch_size": 1,
+        },
+        {
+            "name": "bsd68_r3l_test_sigma30",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.30,
+            "batch_size": 1,
+        },
+        {
+            "name": "bsd68_r3l_test_sigma35",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.35,
+            "batch_size": 1,
+        },
+    ],
+    "bsd68_r3l_test_sigma35": [
+        {
+            "name": "bsd68_r3l_test_sigma25",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.25,
+            "batch_size": 1,
+        },
+        {
+            "name": "bsd68_r3l_test_sigma30",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.30,
+            "batch_size": 1,
+        },
+        {
+            "name": "bsd68_r3l_test_sigma35",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.35,
+            "batch_size": 1,
+        },
+        {
+            "name": "bsd68_r3l_test_sigma40",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.40,
+            "batch_size": 1,
+        },
+        {
+            "name": "bsd68_r3l_test_sigma45",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 0,
+            "noise_type": "gaussian",
+            "noise_param": 0.45,
+            "batch_size": 1,
+        },
+    ],
+    # BSD300 training experiments for R3L replication
+    "bsd300_r3l_train": [
+        {
+            "name": "bsd300_r3l_sigma25_train",
+            "model": "r3l",
+            "dataset": "bsd300",
+            "epochs": 50,
+            "optimizer": "adam",
+            "lr": 0.001,
+            "noise_type": "gaussian",
+            "noise_param": 0.25,
+            "batch_size": 16,
+        },
+        {
+            "name": "bsd300_r3l_sigma35_train",
+            "model": "r3l",
+            "dataset": "bsd300",
+            "epochs": 50,
+            "optimizer": "adam",
+            "lr": 0.001,
+            "noise_type": "gaussian",
+            "noise_param": 0.35,
+            "batch_size": 16,
+        },
+    ],
     # Optimizer comparison (as in the paper)
     "optimizer_comparison": [
         {
@@ -233,6 +372,42 @@ EXPERIMENTS = {
             "lr": 0.001,
             "noise_type": "salt_pepper",
             "noise_param": 0.05,
+            "batch_size": 16,
+        },
+    ],
+    # BSD68 experiments for R3L replication
+    "bsd68_r3l": [
+        {
+            "name": "bsd68_r3l_sigma15",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 5,
+            "optimizer": "adam",
+            "lr": 0.001,
+            "noise_type": "gaussian",
+            "noise_param": 0.15,
+            "batch_size": 16,
+        },
+        {
+            "name": "bsd68_r3l_sigma25",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 5,
+            "optimizer": "adam",
+            "lr": 0.001,
+            "noise_type": "gaussian",
+            "noise_param": 0.25,
+            "batch_size": 16,
+        },
+        {
+            "name": "bsd68_r3l_sigma50",
+            "model": "r3l",
+            "dataset": "bsd68",
+            "epochs": 5,
+            "optimizer": "adam",
+            "lr": 0.001,
+            "noise_type": "gaussian",
+            "noise_param": 0.50,
             "batch_size": 16,
         },
     ],
