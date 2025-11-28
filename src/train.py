@@ -204,7 +204,7 @@ class Trainer:
 
         return avg_metrics
 
-    def save_checkpoint(self, epoch, is_best=False):
+    def save_checkpoint(self, epoch, is_best=False, is_last=False):
         """Save model checkpoint"""
         checkpoint = {
             "epoch": epoch,
@@ -216,15 +216,16 @@ class Trainer:
             "lr": self.lr,
         }
 
-        # Save regular checkpoint
-        checkpoint_path = os.path.join(self.save_dir, f"checkpoint_epoch_{epoch}.pth")
-        torch.save(checkpoint, checkpoint_path)
-
         # Save best model
         if is_best:
             best_path = os.path.join(self.save_dir, "best_model.pth")
             torch.save(checkpoint, best_path)
             print(f"✓ Saved best model (loss: {self.test_losses[-1]:.5f})")
+
+        # Save last checkpoint (overwrite each time)
+        if is_last:
+            last_path = os.path.join(self.save_dir, "last_checkpoint.pth")
+            torch.save(checkpoint, last_path)
 
     def train(self, num_epochs, log_metrics_every=5):
         """
@@ -291,7 +292,8 @@ class Trainer:
             if is_best:
                 self.best_loss = test_loss
 
-            self.save_checkpoint(epoch, is_best)
+            # Save best and last checkpoint only
+            self.save_checkpoint(epoch, is_best=is_best, is_last=True)
 
             # Log best model to wandb
             if self.use_wandb and is_best and self.wandb_config.get("log_model", True):
