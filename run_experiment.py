@@ -2,6 +2,9 @@
 Run experiments defined in config.py
 Usage: python run_experiment.py <experiment_name>
 Example: python run_experiment.py optimizer_comparison
+
+Note: Experiment names will be formatted as:
+  {model}_{dataset}_{config_name} or {model}_{dataset}_{noise_type}_{optimizer}_lr{lr}
 """
 
 import sys
@@ -23,7 +26,13 @@ from utils import (
     plot_psnr_comparison,
     visualize_denoising,
 )
-from config import EXPERIMENTS, DEFAULT_CONFIG, WANDB_CONFIG
+from config import (
+    EXPERIMENTS,
+    DEFAULT_CONFIG,
+    WANDB_CONFIG,
+    MODEL_REGISTRY,
+    DATASET_REGISTRY,
+)
 import wandb
 
 
@@ -37,17 +46,30 @@ def run_single_experiment(config, experiment_name, use_wandb=False):
         print(f"  {key}: {value}")
     print("=" * 80 + "\n")
 
+    # Get model and dataset keys from config (with defaults)
+    model_key = config.get("model", DEFAULT_CONFIG["model"])
+    dataset_key = config.get("dataset", DEFAULT_CONFIG["dataset"])
+
+    # Get model and dataset names from registry
+    model_name = MODEL_REGISTRY.get(model_key, {}).get("name", model_key)
+    dataset_name = DATASET_REGISTRY.get(dataset_key, {}).get("name", dataset_key)
+
+    # Create descriptive run name: model_dataset_experiment
+    descriptive_run_name = f"{model_key}_{dataset_key}_{experiment_name}"
+
     # Initialize wandb
     if use_wandb:
         wandb.init(
             project=WANDB_CONFIG.get("project", "image-denoising-unet"),
             entity=WANDB_CONFIG.get("entity", None),
-            name=experiment_name,
+            name=descriptive_run_name,
             config=config,
             save_code=WANDB_CONFIG.get("save_code", True),
             reinit=True,  # Allow multiple runs in same script
         )
-        print("✓ Weights & Biases initialized\n")
+        print("✓ Weights & Biases initialized")
+        print(f"  Project: {WANDB_CONFIG.get('project', 'image-denoising-unet')}")
+        print(f"  Run: {descriptive_run_name}\n")
 
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -71,10 +93,10 @@ def run_single_experiment(config, experiment_name, use_wandb=False):
         dropout_rate=config.get("dropout", DEFAULT_CONFIG["dropout"]),
     )
 
-    # Create save directory
+    # Create save directory with descriptive name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    save_dir = os.path.join("./models", f"{experiment_name}_{timestamp}")
-    results_dir = os.path.join("./results", f"{experiment_name}_{timestamp}")
+    save_dir = os.path.join("./models", f"{descriptive_run_name}_{timestamp}")
+    results_dir = os.path.join("./results", f"{descriptive_run_name}_{timestamp}")
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
 
@@ -124,6 +146,15 @@ def run_single_experiment(config, experiment_name, use_wandb=False):
     # Save results
     results = {
         "experiment_name": experiment_name,
+        "descriptive_run_name": descriptive_run_name,
+        "model": {
+            "key": model_key,
+            "name": model_name,
+        },
+        "dataset": {
+            "key": dataset_key,
+            "name": dataset_name,
+        },
         "config": config,
         "avg_psnr_noisy": float(avg_psnr_noisy),
         "avg_psnr_denoised": float(avg_psnr_denoised),

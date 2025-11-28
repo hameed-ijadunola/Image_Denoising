@@ -48,7 +48,8 @@ def train_model(args):
     # Setup wandb
     use_wandb = args.use_wandb
     if use_wandb:
-        run_name = f"{args.noise_type}_{args.optimizer}_lr{args.lr}"
+        # Create descriptive experiment name: model_dataset_noise_optimizer_lr
+        run_name = f"{args.model}_{args.dataset}_{args.noise_type}_{args.optimizer}_lr{args.lr}"
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
@@ -134,10 +135,11 @@ def train_model(args):
     num_params = sum(p.numel() for p in model.parameters())
     print(f"  Total parameters: {num_params:,}")
 
-    # Create save directory
-    save_dir = os.path.join(
-        args.save_dir, f"{args.noise_type}_{args.optimizer}_lr{args.lr}"
+    # Create save directory with descriptive name: model_dataset_noise_optimizer_lr
+    experiment_name = (
+        f"{args.model}_{args.dataset}_{args.noise_type}_{args.optimizer}_lr{args.lr}"
     )
+    save_dir = os.path.join(args.save_dir, experiment_name)
 
     # Prepare metadata for tracking (from registry)
     model_metadata = {
@@ -201,9 +203,7 @@ def train_model(args):
 
     # Plot training history (only for models that were trained)
     if requires_training and train_losses:
-        plot_path = os.path.join(
-            args.results_dir, f"{args.noise_type}_{args.optimizer}_loss.png"
-        )
+        plot_path = os.path.join(args.results_dir, f"{experiment_name}_loss.png")
         plot_training_history(train_losses, test_losses, save_path=plot_path)
     else:
         plot_path = None
@@ -231,26 +231,20 @@ def train_model(args):
         wandb.log(log_dict)
 
     # Plot PSNR comparison (legacy)
-    psnr_plot_path = os.path.join(
-        args.results_dir, f"{args.noise_type}_{args.optimizer}_psnr.png"
-    )
+    psnr_plot_path = os.path.join(args.results_dir, f"{experiment_name}_psnr.png")
     if "psnr" in metrics_noisy and "psnr" in metrics_denoised:
         plot_psnr_comparison(
             metrics_noisy["psnr"], metrics_denoised["psnr"], save_path=psnr_plot_path
         )
 
     # Plot all metrics comparison
-    metrics_plot_path = os.path.join(
-        args.results_dir, f"{args.noise_type}_{args.optimizer}_metrics.png"
-    )
+    metrics_plot_path = os.path.join(args.results_dir, f"{experiment_name}_metrics.png")
     plot_metrics_comparison(
         metrics_noisy, metrics_denoised, save_path=metrics_plot_path
     )
 
     # Visualize denoising
-    vis_path = os.path.join(
-        args.results_dir, f"{args.noise_type}_{args.optimizer}_samples.png"
-    )
+    vis_path = os.path.join(args.results_dir, f"{experiment_name}_samples.png")
     visualize_denoising(model, test_loader, device, num_samples=5, save_path=vis_path)
 
     # Log images to wandb
@@ -313,9 +307,7 @@ def train_model(args):
         },
     }
 
-    results_path = os.path.join(
-        args.results_dir, f"{args.noise_type}_{args.optimizer}_results.json"
-    )
+    results_path = os.path.join(args.results_dir, f"{experiment_name}_results.json")
     with open(results_path, "w") as f:
         json.dump(results, f, indent=4)
 
