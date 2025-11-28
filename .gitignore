@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments (venv)
+venv/
+env/
+ENV/
+.venv
+
+# Conda environments
+**/envs/
+.conda/
+
+# PyTorch
+*.pth
+*.pt
+
+# Data
+data/
+*.pkl
+*.pickle
+
+# Results
+results/
+*.png
+*.jpg
+*.jpeg
+
+# Models (keep directory structure but ignore saved models)
+models/*.pth
+models/*.pt
+!models/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Training outputs
+wandb/
+tensorboard/
+lightning_logs/
+
+# Temporary files
+*.tmp
+tmp/
+temp/
