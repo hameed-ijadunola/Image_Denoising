@@ -119,16 +119,16 @@ def train_model(args):
 
     # Create model
     print(f"\nCreating {model_config['name']} model...")
-    
+
     # Prepare model parameters - merge defaults with CLI args
     model_params = model_config.get("default_params", {}).copy()
-    
+
     # Override with command-line arguments if applicable
-    if hasattr(args, 'dropout') and args.dropout is not None:
-        model_params['dropout_rate'] = args.dropout
-    if hasattr(args, 'bilinear'):
-        model_params['bilinear'] = args.bilinear
-    
+    if hasattr(args, "dropout") and args.dropout is not None:
+        model_params["dropout_rate"] = args.dropout
+    if hasattr(args, "bilinear"):
+        model_params["bilinear"] = args.bilinear
+
     model = get_model_from_registry(args.model, MODEL_REGISTRY, **model_params)
 
     num_params = sum(p.numel() for p in model.parameters())
@@ -335,7 +335,7 @@ def evaluate_saved_model(args):
 
     # Load data
     print(f"\nLoading {dataset_config['name']} dataset...")
-    
+
     train_dataset = get_dataset_from_registry(
         args.dataset,
         DATASET_REGISTRY,
@@ -366,12 +366,12 @@ def evaluate_saved_model(args):
 
     # Create model
     print(f"\nCreating {model_config['name']} model...")
-    
+
     # Prepare model parameters
     model_params = model_config.get("default_params", {}).copy()
-    if hasattr(args, 'dropout') and args.dropout is not None:
-        model_params['dropout_rate'] = args.dropout
-    
+    if hasattr(args, "dropout") and args.dropout is not None:
+        model_params["dropout_rate"] = args.dropout
+
     model = get_model_from_registry(args.model, MODEL_REGISTRY, **model_params)
 
     # Load checkpoint
@@ -398,7 +398,9 @@ def evaluate_saved_model(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Image Denoising with Registry-based Models")
+    parser = argparse.ArgumentParser(
+        description="Image Denoising with Registry-based Models"
+    )
 
     # Mode
     parser.add_argument(
