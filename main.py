@@ -1,13 +1,13 @@
 """
-Main script for training and evaluating U-Net image denoising
+Main script for training and evaluating image denoising models
 """
 
 import torch
 import argparse
 import os
 import json
-from src.unet import UNet
-from src.dataset import get_dataloaders
+from torch.utils.data import DataLoader
+from src.registry import get_model_from_registry, get_dataset_from_registry
 from src.train import Trainer, load_checkpoint
 from src.utils import (
     evaluate_model,
@@ -16,15 +16,34 @@ from src.utils import (
     plot_psnr_comparison,
     plot_metrics_comparison,
 )
-from config import WANDB_CONFIG
+from config import WANDB_CONFIG, MODEL_REGISTRY, DATASET_REGISTRY
 import wandb
 
 
 def train_model(args):
-    """Train the U-Net model"""
+    """Train the denoising model"""
     print("\n" + "=" * 70)
-    print("IMAGE DENOISING USING U-NET")
+    print("IMAGE DENOISING")
     print("=" * 70)
+
+    # Setup device
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() and not args.cpu else "cpu"
+    )
+    print(f"\nDevice: {device}")
+
+    # Get model and dataset configuration from registry
+    assert args.model in MODEL_REGISTRY, (
+        f"Model '{args.model}' not found in registry. "
+        f"Available: {', '.join(MODEL_REGISTRY.keys())}"
+    )
+    assert args.dataset in DATASET_REGISTRY, (
+        f"Dataset '{args.dataset}' not found in registry. "
+        f"Available: {', '.join(DATASET_REGISTRY.keys())}"
+    )
+
+    model_config = MODEL_REGISTRY[args.model]
+    dataset_config = DATASET_REGISTRY[args.dataset]
 
     # Setup wandb
     use_wandb = args.use_wandb
@@ -45,36 +64,53 @@ def train_model(args):
                 "dropout": args.dropout,
                 "bilinear": args.bilinear,
                 "num_workers": args.num_workers,
-                # Model metadata
-                "model_name": "U-Net",
-                "model_type": "deep_learning",
-                "model_architecture": "U-Net",
-                # Dataset metadata
-                "dataset_name": "CIFAR-10",
-                "dataset_type": "cifar10",
+                # Model metadata (from registry)
+                "model_key": args.model,
+                "model_name": model_config["name"],
+                "model_type": model_config["type"],
+                "model_architecture": model_config.get("class", "Unknown"),
+                # Dataset metadata (from registry)
+                "dataset_key": args.dataset,
+                "dataset_name": dataset_config["name"],
+                "dataset_type": args.dataset,
             },
             save_code=args.wandb_save_code,
         )
-        print(f"\n✓ Weights & Biases initialized")
+        print("\n✓ Weights & Biases initialized")
         print(f"  Project: {args.wandb_project}")
         print(f"  Run: {run_name}")
 
-    # Setup device
-    device = torch.device(
-        "cuda" if torch.cuda.is_available() and not args.cpu else "cpu"
-    )
-    print(f"\nDevice: {device}")
-
     # Load data
-    print(f"\nLoading CIFAR-10 dataset...")
+    print(f"\nLoading {dataset_config['name']} dataset...")
     print(f"  Noise type: {args.noise_type}")
     print(f"  Noise parameter: {args.noise_param}")
     print(f"  Batch size: {args.batch_size}")
 
-    train_loader, test_loader = get_dataloaders(
-        batch_size=args.batch_size,
+    train_dataset = get_dataset_from_registry(
+        args.dataset,
+        DATASET_REGISTRY,
+        train=True,
         noise_type=args.noise_type,
         noise_param=args.noise_param,
+    )
+    test_dataset = get_dataset_from_registry(
+        args.dataset,
+        DATASET_REGISTRY,
+        train=False,
+        noise_type=args.noise_type,
+        noise_param=args.noise_param,
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
         num_workers=args.num_workers,
     )
 
@@ -82,10 +118,18 @@ def train_model(args):
     print(f"  Test samples: {len(test_loader.dataset)}")
 
     # Create model
-    print(f"\nCreating U-Net model...")
-    model = UNet(
-        n_channels=3, n_classes=3, bilinear=args.bilinear, dropout_rate=args.dropout
-    )
+    print(f"\nCreating {model_config['name']} model...")
+    
+    # Prepare model parameters - merge defaults with CLI args
+    model_params = model_config.get("default_params", {}).copy()
+    
+    # Override with command-line arguments if applicable
+    if hasattr(args, 'dropout') and args.dropout is not None:
+        model_params['dropout_rate'] = args.dropout
+    if hasattr(args, 'bilinear'):
+        model_params['bilinear'] = args.bilinear
+    
+    model = get_model_from_registry(args.model, MODEL_REGISTRY, **model_params)
 
     num_params = sum(p.numel() for p in model.parameters())
     print(f"  Total parameters: {num_params:,}")
@@ -95,19 +139,22 @@ def train_model(args):
         args.save_dir, f"{args.noise_type}_{args.optimizer}_lr{args.lr}"
     )
 
-    # Prepare metadata for tracking
+    # Prepare metadata for tracking (from registry)
     model_metadata = {
-        "name": "U-Net",
-        "type": "deep_learning",
-        "architecture": "U-Net",
+        "name": model_config["name"],
+        "type": model_config["type"],
+        "architecture": model_config.get("class", "Unknown"),
         "parameters": num_params,
+        "paper": model_config.get("paper", "N/A"),
     }
 
     dataset_metadata = {
-        "name": "CIFAR-10",
-        "type": "cifar10",
+        "name": dataset_config["name"],
+        "type": args.dataset,
         "num_train": len(train_loader.dataset),
         "num_test": len(test_loader.dataset),
+        "image_size": dataset_config.get("image_size", "Unknown"),
+        "channels": dataset_config.get("channels", 3),
     }
 
     # Create trainer
@@ -205,19 +252,24 @@ def train_model(args):
 
     # Save results summary
     results = {
-        # Model metadata
+        # Model metadata (from registry)
         "model": {
-            "name": "U-Net",
-            "type": "deep_learning",
-            "architecture": "U-Net",
+            "key": args.model,
+            "name": model_config["name"],
+            "type": model_config["type"],
+            "architecture": model_config.get("class", "Unknown"),
             "parameters": sum(p.numel() for p in model.parameters()),
+            "paper": model_config.get("paper", "N/A"),
         },
-        # Dataset metadata
+        # Dataset metadata (from registry)
         "dataset": {
-            "name": "CIFAR-10",
-            "type": "cifar10",
+            "key": args.dataset,
+            "name": dataset_config["name"],
+            "type": args.dataset,
             "num_train": len(train_loader.dataset),
             "num_test": len(test_loader.dataset),
+            "image_size": str(dataset_config.get("image_size", "Unknown")),
+            "channels": dataset_config.get("channels", 3),
         },
         # Training configuration
         "training": {
@@ -268,17 +320,59 @@ def evaluate_saved_model(args):
     )
     print(f"\nDevice: {device}")
 
+    # Get model and dataset configuration from registry
+    assert args.model in MODEL_REGISTRY, (
+        f"Model '{args.model}' not found in registry. "
+        f"Available: {', '.join(MODEL_REGISTRY.keys())}"
+    )
+    assert args.dataset in DATASET_REGISTRY, (
+        f"Dataset '{args.dataset}' not found in registry. "
+        f"Available: {', '.join(DATASET_REGISTRY.keys())}"
+    )
+
+    model_config = MODEL_REGISTRY[args.model]
+    dataset_config = DATASET_REGISTRY[args.dataset]
+
     # Load data
-    print(f"\nLoading CIFAR-10 dataset...")
-    train_loader, test_loader = get_dataloaders(
-        batch_size=args.batch_size,
+    print(f"\nLoading {dataset_config['name']} dataset...")
+    
+    train_dataset = get_dataset_from_registry(
+        args.dataset,
+        DATASET_REGISTRY,
+        train=True,
         noise_type=args.noise_type,
         noise_param=args.noise_param,
+    )
+    test_dataset = get_dataset_from_registry(
+        args.dataset,
+        DATASET_REGISTRY,
+        train=False,
+        noise_type=args.noise_type,
+        noise_param=args.noise_param,
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
         num_workers=args.num_workers,
     )
 
     # Create model
-    model = UNet(n_channels=3, n_classes=3, dropout_rate=args.dropout)
+    print(f"\nCreating {model_config['name']} model...")
+    
+    # Prepare model parameters
+    model_params = model_config.get("default_params", {}).copy()
+    if hasattr(args, 'dropout') and args.dropout is not None:
+        model_params['dropout_rate'] = args.dropout
+    
+    model = get_model_from_registry(args.model, MODEL_REGISTRY, **model_params)
 
     # Load checkpoint
     print(f"\nLoading checkpoint: {args.checkpoint}")
@@ -304,7 +398,7 @@ def evaluate_saved_model(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="U-Net Image Denoising")
+    parser = argparse.ArgumentParser(description="Image Denoising with Registry-based Models")
 
     # Mode
     parser.add_argument(
@@ -313,6 +407,22 @@ def main():
         default="train",
         choices=["train", "eval"],
         help="Mode: train or eval",
+    )
+
+    # Model selection (from registry)
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="unet",
+        help=f"Model to use from registry (available: {', '.join(MODEL_REGISTRY.keys())})",
+    )
+
+    # Dataset selection (from registry)
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="cifar10",
+        help=f"Dataset to use from registry (available: {', '.join(DATASET_REGISTRY.keys())})",
     )
 
     # Model parameters
