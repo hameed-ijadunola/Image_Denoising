@@ -17,6 +17,7 @@ This project demonstrates the effectiveness of deep convolutional neural network
 - **Multiple Optimizers**: Comparison of Adam, RMSprop, and SGD optimizers
 - **Comprehensive Evaluation**: PSNR (Peak Signal-to-Noise Ratio) metrics and visualizations
 - **Flexible Training**: Configurable hyperparameters including learning rate, batch size, epochs, and dropout
+- **Weights & Biases Integration**: Experiment tracking, visualization, and model versioning with wandb
 
 ## Project Structure
 
@@ -84,6 +85,23 @@ source venv/bin/activate        # For venv
 
 ## Usage
 
+### Quick Start with Weights & Biases
+
+For experiment tracking and visualization:
+
+```bash
+# First time: login to wandb
+wandb login
+
+# Train with wandb tracking
+python main.py --use-wandb --epochs 10
+
+# Run experiments with wandb
+python run_experiment.py optimizer_comparison --use-wandb
+```
+
+📊 **See [WANDB_GUIDE.md](WANDB_GUIDE.md) for complete wandb integration documentation.**
+
 ### Training
 
 Train a model with default settings (Gaussian noise, Adam optimizer):
@@ -124,6 +142,14 @@ python main.py --mode train \
 - `--num-workers`: Number of data loading workers (default: 2)
 - `--save-dir`: Directory to save models (default: ./models)
 - `--results-dir`: Directory to save results (default: ./results)
+
+**Weights & Biases Options:**
+- `--use-wandb`: Enable Weights & Biases logging
+- `--wandb-project`: Project name (default: image-denoising-unet)
+- `--wandb-entity`: Entity/team name (optional)
+- `--wandb-log-interval`: Log metrics every N batches (default: 1)
+- `--wandb-log-images`: Log sample images to wandb
+- `--wandb-log-model`: Save model checkpoints to wandb
 
 ### Evaluation
 

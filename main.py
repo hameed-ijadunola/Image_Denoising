@@ -15,6 +15,15 @@ from src.utils import (
     plot_training_history,
     plot_psnr_comparison,
 )
+from config import WANDB_CONFIG
+
+try:
+    import wandb
+
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+    print("Warning: wandb not installed. Install with: pip install wandb")
 
 
 def train_model(args):
@@ -22,6 +31,31 @@ def train_model(args):
     print("\n" + "=" * 70)
     print("IMAGE DENOISING USING U-NET")
     print("=" * 70)
+
+    # Setup wandb
+    use_wandb = args.use_wandb and WANDB_AVAILABLE
+    if use_wandb:
+        run_name = f"{args.noise_type}_{args.optimizer}_lr{args.lr}"
+        wandb.init(
+            project=args.wandb_project,
+            entity=args.wandb_entity,
+            name=run_name,
+            config={
+                "epochs": args.epochs,
+                "batch_size": args.batch_size,
+                "learning_rate": args.lr,
+                "optimizer": args.optimizer,
+                "noise_type": args.noise_type,
+                "noise_param": args.noise_param,
+                "dropout": args.dropout,
+                "bilinear": args.bilinear,
+                "num_workers": args.num_workers,
+            },
+            save_code=args.wandb_save_code,
+        )
+        print(f"\n✓ Weights & Biases initialized")
+        print(f"  Project: {args.wandb_project}")
+        print(f"  Run: {run_name}")
 
     # Setup device
     device = torch.device(
@@ -60,6 +94,12 @@ def train_model(args):
     )
 
     # Create trainer
+    wandb_config = {
+        "log_interval": args.wandb_log_interval,
+        "log_images": args.wandb_log_images,
+        "log_model": args.wandb_log_model,
+    }
+
     trainer = Trainer(
         model=model,
         device=device,
@@ -68,6 +108,8 @@ def train_model(args):
         optimizer_name=args.optimizer,
         lr=args.lr,
         save_dir=save_dir,
+        use_wandb=use_wandb,
+        wandb_config=wandb_config,
     )
 
     # Train
@@ -83,10 +125,20 @@ def train_model(args):
     print("\nEvaluating model on test set...")
     avg_psnr_noisy, avg_psnr_denoised = evaluate_model(model, test_loader, device)
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Average Noisy PSNR: {avg_psnr_noisy:.2f} dB")
     print(f"  Average Denoised PSNR: {avg_psnr_denoised:.2f} dB")
     print(f"  Improvement: +{avg_psnr_denoised - avg_psnr_noisy:.2f} dB")
+
+    # Log to wandb
+    if use_wandb:
+        wandb.log(
+            {
+                "final_psnr_noisy": avg_psnr_noisy,
+                "final_psnr_denoised": avg_psnr_denoised,
+                "psnr_improvement": avg_psnr_denoised - avg_psnr_noisy,
+            }
+        )
 
     # Plot PSNR comparison
     psnr_plot_path = os.path.join(
@@ -99,6 +151,20 @@ def train_model(args):
         args.results_dir, f"{args.noise_type}_{args.optimizer}_samples.png"
     )
     visualize_denoising(model, test_loader, device, num_samples=5, save_path=vis_path)
+
+    # Log images to wandb
+    if use_wandb and args.wandb_log_images:
+        # Log training history plot
+        if os.path.exists(plot_path):
+            wandb.log({"training_loss_curve": wandb.Image(plot_path)})
+
+        # Log PSNR comparison
+        if os.path.exists(psnr_plot_path):
+            wandb.log({"psnr_comparison": wandb.Image(psnr_plot_path)})
+
+        # Log denoising samples
+        if os.path.exists(vis_path):
+            wandb.log({"denoising_samples": wandb.Image(vis_path)})
 
     # Save results summary
     results = {
@@ -127,6 +193,10 @@ def train_model(args):
     print("\n" + "=" * 70)
     print("TRAINING COMPLETE!")
     print("=" * 70 + "\n")
+
+    # Finish wandb run
+    if use_wandb:
+        wandb.finish()
 
 
 def evaluate_saved_model(args):
@@ -257,6 +327,50 @@ def main():
     # Device
     parser.add_argument(
         "--cpu", action="store_true", help="Force CPU usage even if GPU is available"
+    )
+
+    # Weights & Biases parameters
+    parser.add_argument(
+        "--use-wandb",
+        action="store_true",
+        default=WANDB_CONFIG.get("enabled", True),
+        help="Enable Weights & Biases logging",
+    )
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default=WANDB_CONFIG.get("project", "image-denoising-unet"),
+        help="Wandb project name",
+    )
+    parser.add_argument(
+        "--wandb-entity",
+        type=str,
+        default=WANDB_CONFIG.get("entity", None),
+        help="Wandb entity (username or team)",
+    )
+    parser.add_argument(
+        "--wandb-log-interval",
+        type=int,
+        default=WANDB_CONFIG.get("log_interval", 1),
+        help="Log metrics every N batches (default: 1)",
+    )
+    parser.add_argument(
+        "--wandb-log-images",
+        action="store_true",
+        default=WANDB_CONFIG.get("log_images", True),
+        help="Log sample images to wandb",
+    )
+    parser.add_argument(
+        "--wandb-log-model",
+        action="store_true",
+        default=WANDB_CONFIG.get("log_model", True),
+        help="Save model checkpoints to wandb",
+    )
+    parser.add_argument(
+        "--wandb-save-code",
+        action="store_true",
+        default=WANDB_CONFIG.get("save_code", True),
+        help="Save code to wandb",
     )
 
     args = parser.parse_args()

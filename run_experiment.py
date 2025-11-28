@@ -23,10 +23,18 @@ from utils import (
     plot_psnr_comparison,
     visualize_denoising,
 )
-from config import EXPERIMENTS, DEFAULT_CONFIG
+from config import EXPERIMENTS, DEFAULT_CONFIG, WANDB_CONFIG
+
+try:
+    import wandb
+
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+    print("Warning: wandb not installed. Install with: pip install wandb")
 
 
-def run_single_experiment(config, experiment_name):
+def run_single_experiment(config, experiment_name, use_wandb=False):
     """Run a single experiment with given configuration"""
     print("\n" + "=" * 80)
     print(f"RUNNING EXPERIMENT: {experiment_name}")
@@ -35,6 +43,18 @@ def run_single_experiment(config, experiment_name):
     for key, value in config.items():
         print(f"  {key}: {value}")
     print("=" * 80 + "\n")
+
+    # Initialize wandb
+    if use_wandb and WANDB_AVAILABLE:
+        wandb.init(
+            project=WANDB_CONFIG.get("project", "image-denoising-unet"),
+            entity=WANDB_CONFIG.get("entity", None),
+            name=experiment_name,
+            config=config,
+            save_code=WANDB_CONFIG.get("save_code", True),
+            reinit=True,  # Allow multiple runs in same script
+        )
+        print("✓ Weights & Biases initialized\n")
 
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -71,6 +91,12 @@ def run_single_experiment(config, experiment_name):
         json.dump(config, f, indent=4)
 
     # Create trainer
+    wandb_config = {
+        "log_interval": WANDB_CONFIG.get("log_interval", 1),
+        "log_images": WANDB_CONFIG.get("log_images", True),
+        "log_model": WANDB_CONFIG.get("log_model", True),
+    }
+
     trainer = Trainer(
         model=model,
         device=device,
@@ -79,6 +105,8 @@ def run_single_experiment(config, experiment_name):
         optimizer_name=config.get("optimizer", DEFAULT_CONFIG["optimizer"]),
         lr=config.get("lr", DEFAULT_CONFIG["lr"]),
         save_dir=save_dir,
+        use_wandb=use_wandb and WANDB_AVAILABLE,
+        wandb_config=wandb_config,
     )
 
     # Train
@@ -89,6 +117,16 @@ def run_single_experiment(config, experiment_name):
     # Evaluate
     print("\nEvaluating model...")
     avg_psnr_noisy, avg_psnr_denoised = evaluate_model(model, test_loader, device)
+
+    # Log to wandb
+    if use_wandb and WANDB_AVAILABLE:
+        wandb.log(
+            {
+                "final_psnr_noisy": avg_psnr_noisy,
+                "final_psnr_denoised": avg_psnr_denoised,
+                "psnr_improvement": avg_psnr_denoised - avg_psnr_noisy,
+            }
+        )
 
     # Save results
     results = {
@@ -128,6 +166,22 @@ def run_single_experiment(config, experiment_name):
         save_path=os.path.join(results_dir, "denoising_samples.png"),
     )
 
+    # Log visualizations to wandb
+    if use_wandb and WANDB_AVAILABLE and WANDB_CONFIG.get("log_images", True):
+        wandb.log(
+            {
+                "training_loss_curve": wandb.Image(
+                    os.path.join(results_dir, "loss_curve.png")
+                ),
+                "psnr_comparison": wandb.Image(
+                    os.path.join(results_dir, "psnr_comparison.png")
+                ),
+                "denoising_samples": wandb.Image(
+                    os.path.join(results_dir, "denoising_samples.png")
+                ),
+            }
+        )
+
     # Print summary
     print("\n" + "=" * 80)
     print("EXPERIMENT RESULTS:")
@@ -142,10 +196,14 @@ def run_single_experiment(config, experiment_name):
     print(f"Model saved to: {save_dir}")
     print("=" * 80 + "\n")
 
+    # Finish wandb run
+    if use_wandb and WANDB_AVAILABLE:
+        wandb.finish()
+
     return results
 
 
-def run_experiment_suite(suite_name):
+def run_experiment_suite(suite_name, use_wandb=False):
     """Run a suite of experiments"""
     if suite_name not in EXPERIMENTS:
         print(f"Error: Unknown experiment suite '{suite_name}'")
@@ -156,6 +214,9 @@ def run_experiment_suite(suite_name):
     print("\n" + "=" * 80)
     print(f"RUNNING EXPERIMENT SUITE: {suite_name}")
     print(f"Total experiments: {len(experiments)}")
+    print(
+        f"Wandb logging: {'Enabled' if use_wandb and WANDB_AVAILABLE else 'Disabled'}"
+    )
     print("=" * 80)
 
     all_results = []
@@ -164,7 +225,7 @@ def run_experiment_suite(suite_name):
         print(f"\n[{i}/{len(experiments)}] Starting experiment: {exp_name}")
 
         try:
-            results = run_single_experiment(config, exp_name)
+            results = run_single_experiment(config, exp_name, use_wandb=use_wandb)
             all_results.append(results)
         except Exception as e:
             print(f"Error in experiment {exp_name}: {str(e)}")
@@ -218,6 +279,13 @@ Available experiment suites:
         "--list", action="store_true", help="List available experiment suites"
     )
 
+    parser.add_argument(
+        "--use-wandb",
+        action="store_true",
+        default=WANDB_CONFIG.get("enabled", True),
+        help="Enable Weights & Biases logging for experiments",
+    )
+
     args = parser.parse_args()
 
     if args.list:
@@ -234,7 +302,7 @@ Available experiment suites:
         print()
         return
 
-    run_experiment_suite(args.suite)
+    run_experiment_suite(args.suite, use_wandb=args.use_wandb)
 
 
 if __name__ == "__main__":

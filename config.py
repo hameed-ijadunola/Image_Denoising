@@ -91,3 +91,15 @@ DEFAULT_CONFIG = {
     "num_workers": 2,
     "bilinear": False,
 }
+
+# Weights & Biases configuration
+WANDB_CONFIG = {
+    "enabled": True,  # Set to False to disable wandb logging
+    "project": "rl_image_denoising",  # wandb project name
+    "entity": "image_denoising",  # wandb entity (username or team), None for default
+    "log_interval": 1,  # Log metrics every N batches (1 = every batch)
+    "log_images": True,  # Log sample denoised images
+    "log_gradients": False,  # Log gradient histograms (can be slow)
+    "log_model": True,  # Save model checkpoints to wandb
+    "save_code": True,  # Save code to wandb
+}

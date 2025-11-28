@@ -10,6 +10,14 @@ import os
 import json
 from datetime import datetime
 
+try:
+    import wandb
+
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+    print("Warning: wandb not installed. Install with: pip install wandb")
+
 
 class Trainer:
     """
@@ -25,6 +33,8 @@ class Trainer:
         optimizer_name="adam",
         lr=0.001,
         save_dir="./models",
+        use_wandb=False,
+        wandb_config=None,
     ):
         """
         Args:
@@ -35,6 +45,8 @@ class Trainer:
             optimizer_name: Name of optimizer ('adam', 'rmsprop', 'sgd')
             lr: Learning rate
             save_dir: Directory to save models
+            use_wandb: Whether to use Weights & Biases logging
+            wandb_config: Dictionary with wandb configuration options
         """
         self.model = model.to(device)
         self.device = device
@@ -42,6 +54,12 @@ class Trainer:
         self.test_loader = test_loader
         self.save_dir = save_dir
         self.lr = lr
+        self.use_wandb = use_wandb and WANDB_AVAILABLE
+
+        # Wandb configuration
+        if self.use_wandb and wandb_config is None:
+            wandb_config = {}
+        self.wandb_config = wandb_config or {}
 
         # Loss function (MSE for denoising)
         self.criterion = nn.MSELoss()
@@ -71,7 +89,7 @@ class Trainer:
         epoch_loss = 0.0
 
         pbar = tqdm(self.train_loader, desc="Training")
-        for noisy_images, clean_images in pbar:
+        for batch_idx, (noisy_images, clean_images) in enumerate(pbar):
             noisy_images = noisy_images.to(self.device)
             clean_images = clean_images.to(self.device)
 
@@ -86,6 +104,17 @@ class Trainer:
 
             epoch_loss += loss.item()
             pbar.set_postfix({"loss": f"{loss.item():.5f}"})
+
+            # Log to wandb
+            if self.use_wandb and self.wandb_config.get("log_interval", 1) > 0:
+                if batch_idx % self.wandb_config.get("log_interval", 1) == 0:
+                    wandb.log(
+                        {
+                            "batch_loss": loss.item(),
+                            "batch": batch_idx
+                            + len(self.train_loader) * (len(self.train_losses)),
+                        }
+                    )
 
         avg_loss = epoch_loss / len(self.train_loader)
         return avg_loss
@@ -137,11 +166,12 @@ class Trainer:
             num_epochs: Number of epochs to train
         """
         print(f"\n{'=' * 60}")
-        print(f"Training Configuration:")
+        print("Training Configuration:")
         print(f"  Optimizer: {self.optimizer_name.upper()}")
         print(f"  Learning Rate: {self.lr}")
         print(f"  Epochs: {num_epochs}")
         print(f"  Device: {self.device}")
+        print(f"  Wandb Logging: {'Enabled' if self.use_wandb else 'Disabled'}")
         print(f"{'=' * 60}\n")
 
         for epoch in range(1, num_epochs + 1):
@@ -158,12 +188,27 @@ class Trainer:
 
             print(f"Train Loss: {train_loss:.5f} | Test Loss: {test_loss:.5f}")
 
+            # Log to wandb
+            if self.use_wandb:
+                log_dict = {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "test_loss": test_loss,
+                    "learning_rate": self.lr,
+                }
+                wandb.log(log_dict)
+
             # Save checkpoint
             is_best = test_loss < self.best_loss
             if is_best:
                 self.best_loss = test_loss
 
             self.save_checkpoint(epoch, is_best)
+
+            # Log best model to wandb
+            if self.use_wandb and is_best and self.wandb_config.get("log_model", True):
+                best_path = os.path.join(self.save_dir, "best_model.pth")
+                wandb.save(best_path)
 
         # Save training history
         history_path = os.path.join(self.save_dir, "training_history.json")
@@ -181,7 +226,7 @@ class Trainer:
             )
 
         print(f"\n{'=' * 60}")
-        print(f"Training Complete!")
+        print("Training Complete!")
         print(f"  Best Test Loss: {self.best_loss:.5f}")
         print(f"  Final Train Loss: {self.train_losses[-1]:.5f}")
         print(f"  Model saved to: {self.save_dir}")
