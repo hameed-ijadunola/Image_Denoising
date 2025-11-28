@@ -35,6 +35,7 @@ def train_model(args):
             entity=args.wandb_entity,
             name=run_name,
             config={
+                # Training hyperparameters
                 "epochs": args.epochs,
                 "batch_size": args.batch_size,
                 "learning_rate": args.lr,
@@ -44,6 +45,13 @@ def train_model(args):
                 "dropout": args.dropout,
                 "bilinear": args.bilinear,
                 "num_workers": args.num_workers,
+                # Model metadata
+                "model_name": "U-Net",
+                "model_type": "deep_learning",
+                "model_architecture": "U-Net",
+                # Dataset metadata
+                "dataset_name": "CIFAR-10",
+                "dataset_type": "cifar10",
             },
             save_code=args.wandb_save_code,
         )
@@ -87,6 +95,21 @@ def train_model(args):
         args.save_dir, f"{args.noise_type}_{args.optimizer}_lr{args.lr}"
     )
 
+    # Prepare metadata for tracking
+    model_metadata = {
+        "name": "U-Net",
+        "type": "deep_learning",
+        "architecture": "U-Net",
+        "parameters": num_params,
+    }
+
+    dataset_metadata = {
+        "name": "CIFAR-10",
+        "type": "cifar10",
+        "num_train": len(train_loader.dataset),
+        "num_test": len(test_loader.dataset),
+    }
+
     # Create trainer
     wandb_config = {
         "log_interval": args.wandb_log_interval,
@@ -104,6 +127,8 @@ def train_model(args):
         save_dir=save_dir,
         use_wandb=use_wandb,
         wandb_config=wandb_config,
+        model_metadata=model_metadata,
+        dataset_metadata=dataset_metadata,
     )
 
     # Train

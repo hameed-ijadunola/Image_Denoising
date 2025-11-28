@@ -243,6 +243,23 @@ class Trainer:
         print(f"  Metrics Logging: Every {log_metrics_every} epochs")
         print(f"{'=' * 60}\n")
 
+        # Log model and dataset metadata to wandb at the start of training
+        if self.use_wandb:
+            metadata_log = {}
+
+            # Add model metadata
+            for key, value in self.model_metadata.items():
+                metadata_log[f"model/{key}"] = value
+
+            # Add dataset metadata
+            for key, value in self.dataset_metadata.items():
+                metadata_log[f"dataset/{key}"] = value
+
+            # Log to wandb
+            if metadata_log:
+                wandb.log(metadata_log)
+                print("✓ Logged model and dataset metadata to wandb\n")
+
         for epoch in range(1, num_epochs + 1):
             print(f"\nEpoch {epoch}/{num_epochs}")
             print("-" * 60)
